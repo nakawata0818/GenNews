@@ -1,4 +1,3 @@
-def get_sheet():
 
 import os
 import gspread
