@@ -1,15 +1,31 @@
+def get_sheet():
+
 import os
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import base64
 
 SCOPE = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
 SHEET_KEY = os.getenv('SHEET_KEY')  # シートIDは環境変数で
 SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
 
-# シート認証・取得
+def setup_google_credentials():
+    b64 = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+    if b64:
+        json_bytes = base64.b64decode(b64)
+        path = "/tmp/service_account.json"
+        with open(path, "wb") as f:
+            f.write(json_bytes)
+        return path
+    elif SERVICE_ACCOUNT_JSON:
+        return SERVICE_ACCOUNT_JSON
+    else:
+        raise Exception("Google認証情報が設定されていません")
 
+# シート認証・取得
 def get_sheet():
-    creds = ServiceAccountCredentials.from_json_keyfile_name(SERVICE_ACCOUNT_JSON, SCOPE)
+    creds_path = setup_google_credentials()
+    creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, SCOPE)
     gc = gspread.authorize(creds)
     return gc.open_by_key(SHEET_KEY).sheet1
 
