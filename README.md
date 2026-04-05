@@ -78,3 +78,23 @@ python main.py
 - パーソナライズ強化
 - 音声化
 - Web UI
+
+## Google Sheets連携
+
+- Google SheetsのシートID（SHEET_KEY）とサービスアカウントJSON（GOOGLE_SERVICE_ACCOUNT_JSON）を用意
+- .envに下記を追加
+
+```
+SHEET_KEY=your-google-sheet-id
+GOOGLE_SERVICE_ACCOUNT_JSON=service_account.json
+```
+
+- シート構成例：
+    - 1列目: LINE_USER_ID
+    - 2列目: KEYWORDS
+
+## Renderデプロイ
+
+- requirements.txt, Procfile, gunicorn対応済み
+- Webhookエンドポイント `/linewebhook` をLINE Developersに設定
+- サービスアカウントJSONはRenderの環境変数または永続ストレージに配置

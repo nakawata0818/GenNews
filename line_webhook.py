@@ -1,33 +1,59 @@
 import os
-import json
-from flask import Flask, request, abort
+from flask import Flask, request
 import requests
-from config import LINE_CHANNEL_ACCESS_TOKEN
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from config import LINE_CHANNEL_ACCESS_TOKEN, GOOGLE_SHEETS_CRED_JSON, SHEET_NAME
 
 app = Flask(__name__)
 
-KEYWORDS_PATH = os.path.join(os.path.dirname(__file__), 'keywords.json')
+# Google Sheets認証
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name(GOOGLE_SHEETS_CRED_JSON, scope)
+client = gspread.authorize(creds)
+sheet = client.open(SHEET_NAME).sheet1  # 1シート目を利用
 
 @app.route("/linewebhook", methods=['POST'])
 def linewebhook():
-    signature = request.headers.get('X-Line-Signature')
-    body = request.get_data(as_text=True)
     try:
         events = request.json['events']
     except Exception:
         return 'ok'
+
     for event in events:
         if event['type'] == 'message' and event['message']['type'] == 'text':
             user_text = event['message']['text']
             user_id = event['source']['userId']
+
             if user_text.startswith('キーワード:'):
-                # 例: キーワード:AI,経済,健康
                 keywords = [k.strip() for k in user_text.replace('キーワード:', '').split(',') if k.strip()]
-                with open(KEYWORDS_PATH, 'w', encoding='utf-8') as f:
-                    json.dump(keywords, f, ensure_ascii=False, indent=2)
-                reply_text = f"キーワードを更新しました:\n{', '.join(keywords)}"
+                keywords_str = ','.join(keywords)
+
+                # ユーザーIDの行を検索
+                try:
+                    cell = sheet.find(user_id)
+                    sheet.update_cell(cell.row, 2, keywords_str)  # 2列目にキーワード
+                except gspread.exceptions.CellNotFound:
+                    # 新規ユーザーの場合は末尾に追加
+                    sheet.append_row([user_id, keywords_str])
+
+                reply_text = f"キーワードを更新しました:\n{keywords_str}"
                 reply_message(event['replyToken'], reply_text)
+
+            elif user_text.startswith('キーワード確認'):
+                try:
+                    cell = sheet.find(user_id)
+                    kws = sheet.cell(cell.row, 2).value
+                except gspread.exceptions.CellNotFound:
+                    kws = ''
+                reply_text = f"現在のキーワード: {kws if kws else '未設定'}"
+                reply_message(event['replyToken'], reply_text)
+
+            else:
+                reply_message(event['replyToken'], "キーワードを設定するには「キーワード:」で送信してください。")
+
     return 'ok'
+
 
 def reply_message(reply_token, text):
     url = 'https://api.line.me/v2/bot/message/reply'
@@ -41,7 +67,12 @@ def reply_message(reply_token, text):
             {"type": "text", "text": text}
         ]
     }
-    requests.post(url, headers=headers, json=data)
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"[LINE reply error] {e}")
+
 
 if __name__ == "__main__":
-    app.run(port=5000)
+    app.run(host="0.0.0.0", port=5000)
