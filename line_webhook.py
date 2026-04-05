@@ -4,20 +4,22 @@ from flask import Flask, request
 import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+
 from config import LINE_CHANNEL_ACCESS_TOKEN, SHEET_NAME, GOOGLE_SHEET_KEY
 from sheet_utils import setup_google_credentials
 
 app = Flask(__name__)
 
-# Google Sheets認証
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds_path = setup_google_credentials()
-creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
-client = gspread.authorize(creds)
-if GOOGLE_SHEET_KEY:
-    sheet = client.open_by_key(GOOGLE_SHEET_KEY).sheet1
-else:
-    sheet = client.open(SHEET_NAME).sheet1
+
+def get_sheet():
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds_path = setup_google_credentials()
+    creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
+    client = gspread.authorize(creds)
+    if GOOGLE_SHEET_KEY:
+        return client.open_by_key(GOOGLE_SHEET_KEY).sheet1
+    else:
+        return client.open(SHEET_NAME).sheet1
 
 @app.route("/linewebhook", methods=['POST'])
 def linewebhook():
@@ -26,6 +28,7 @@ def linewebhook():
     except Exception:
         return 'ok'
 
+    sheet = get_sheet()
     for event in events:
         if event['type'] == 'message' and event['message']['type'] == 'text':
             user_text = event['message']['text']
