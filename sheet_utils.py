@@ -1,34 +1,91 @@
+def get_user_keywords(user_id):
+    """
+    keywordsシートからユーザーのキーワードと重みを取得
+    return: [(keyword, weight), ...]
+    """
+    sheet = get_sheet_by_name('keywords')
+    records = sheet.get_all_records()
+    result = []
+    for row in records:
+        if row.get('user_id') == user_id:
+            kw = row.get('keyword')
+            try:
+                weight = float(row.get('weight', 1.0))
+            except Exception:
+                weight = 1.0
+            result.append((kw, weight))
+    return result
+
+def get_sent_article_ids(user_id):
+    """
+    historyシートからユーザーが既に受信した記事IDセットを返す
+    """
+    sheet = get_sheet_by_name('history')
+    records = sheet.get_all_records()
+    return set(row['article_id'] for row in records if row.get('user_id') == user_id)
+
+def save_sent_articles(user_id, article_ids):
+    """
+    historyシートに送信済み記事を追加
+    """
+    sheet = get_sheet_by_name('history')
+    for aid in article_ids:
+        sheet.append_row([user_id, aid])
+
+def update_keyword_weight(user_id, keyword, delta):
+    """
+    keywordsシートのweightを増減。なければ新規追加。
+    """
+    sheet = get_sheet_by_name('keywords')
+    records = sheet.get_all_records()
+    for idx, row in enumerate(records, start=2):
+        if row.get('user_id') == user_id and row.get('keyword') == keyword:
+            try:
+                weight = float(row.get('weight', 1.0))
+            except Exception:
+                weight = 1.0
+            new_weight = max(0.0, weight + delta)
+            sheet.update_cell(idx, 3, new_weight)
+            return
+    # 新規
+    sheet.append_row([user_id, keyword, max(0.0, 1.0 + delta)])
+
+def get_sheet_by_name(name):
+    creds_path = setup_google_credentials()
+    creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, SCOPE)
+    client = gspread.authorize(creds)
+    return client.open_by_key(GOOGLE_SHEET_KEY).worksheet(name)
 
 import os
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import tempfile
 import base64
+from config import GOOGLE_SHEET_KEY, SHEET_NAME, GOOGLE_SHEETS_CRED_JSON
 
 SCOPE = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-SHEET_KEY = os.getenv('SHEET_KEY')  # シートIDは環境変数で
-SERVICE_ACCOUNT_JSON = os.getenv('GOOGLE_SERVICE_ACCOUNT_JSON')
 
 def setup_google_credentials():
     b64 = os.getenv("GOOGLE_CREDENTIALS_BASE64")
     if b64:
         json_bytes = base64.b64decode(b64)
-        path = "/tmp/service_account.json"
-        with open(path, "wb") as f:
+        tmp_path = os.path.join(tempfile.gettempdir(), "service_account.json")
+        with open(tmp_path, "wb") as f:
             f.write(json_bytes)
-        return path
-    elif SERVICE_ACCOUNT_JSON:
-        return SERVICE_ACCOUNT_JSON
+        return tmp_path
+    elif GOOGLE_SHEETS_CRED_JSON:
+        return GOOGLE_SHEETS_CRED_JSON
     else:
         raise Exception("Google認証情報が設定されていません")
 
-# シート認証・取得
 def get_sheet():
     creds_path = setup_google_credentials()
     creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, SCOPE)
-    gc = gspread.authorize(creds)
-    return gc.open_by_key(SHEET_KEY).sheet1
-
-# ユーザーのキーワードを取得
+    client = gspread.authorize(creds)
+    if GOOGLE_SHEET_KEY:
+        return client.open_by_key(GOOGLE_SHEET_KEY).sheet1
+    else:
+        return client.open(SHEET_NAME).sheet1
 
 def get_user_keywords(user_id):
     sheet = get_sheet()

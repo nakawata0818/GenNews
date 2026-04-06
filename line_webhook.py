@@ -6,7 +6,8 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 from config import LINE_CHANNEL_ACCESS_TOKEN, SHEET_NAME, GOOGLE_SHEET_KEY
-from sheet_utils import setup_google_credentials
+from sheet_utils import setup_google_credentials, update_keyword_weight
+from send_news import get_more_news
 
 app = Flask(__name__)
 
@@ -34,7 +35,25 @@ def linewebhook():
             user_text = event['message']['text']
             user_id = event['source']['userId']
 
-            if user_text.startswith('キーワード:'):
+            if user_text == 'もっと':
+                get_more_news(user_id)
+                reply_message(event['replyToken'], '追加ニュースを配信しました')
+            elif user_text.startswith('いいね:'):
+                # 例: いいね:https://example.com/article
+                article_id = user_text.replace('いいね:', '').strip()
+                # 関連キーワードのweight += 0.2
+                # シンプルに全キーワードを+0.2（実運用では記事内容解析も可）
+                from sheet_utils import get_user_keywords
+                for kw, _ in get_user_keywords(user_id):
+                    update_keyword_weight(user_id, kw, 0.2)
+                reply_message(event['replyToken'], f'フィードバックありがとうございました（+）')
+            elif user_text.startswith('興味なし:'):
+                article_id = user_text.replace('興味なし:', '').strip()
+                from sheet_utils import get_user_keywords
+                for kw, _ in get_user_keywords(user_id):
+                    update_keyword_weight(user_id, kw, -0.3)
+                reply_message(event['replyToken'], f'フィードバックありがとうございました（-）')
+            elif user_text.startswith('キーワード:'):
                 keywords = [k.strip() for k in user_text.replace('キーワード:', '').split(',') if k.strip()]
                 keywords_str = ','.join(keywords)
 
@@ -61,7 +80,7 @@ def linewebhook():
                 reply_message(event['replyToken'], reply_text)
 
             else:
-                reply_message(event['replyToken'], "キーワードを設定するには「キーワード:」で送信してください。")
+                reply_message(event['replyToken'], "キーワードを設定するには「キーワード:」で送信してください。\n追加配信は「もっと」、フィードバックは「いいね:URL」「興味なし:URL」で送信してください。")
 
     return 'ok'
 

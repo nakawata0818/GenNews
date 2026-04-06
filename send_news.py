@@ -1,7 +1,8 @@
 import os
 import time
 import requests
-from sheet_utils import get_user_keywords, get_sheet
+from sheet_utils import get_user_keywords, get_sheet, get_sent_article_ids, save_sent_articles
+from scoring import score_news
 from rss import fetch_rss_articles
 from dedup import deduplicate_articles
 from summarize_gemini import summarize_article
@@ -38,22 +39,64 @@ def send_line_digest(user_id, messages):
     except Exception as e:
         print(f"[LINE error] {e}")
 
+
 def main():
     sheet = get_sheet()
     records = sheet.get_all_records()
     for row in records:
         user_id = row['LINE_USER_ID']
+        # 既存のキーワード列からキーワードリストを生成
         keywords = [k.strip() for k in row['KEYWORDS'].split(',') if k.strip()]
         if not keywords:
             continue
+        # 記事取得
         articles = fetch_rss_articles(keywords)
-        articles = deduplicate_articles(articles)[:3]
+        articles = deduplicate_articles(articles)
+        # 既に送信済みの記事を除外
+        sent_ids = get_sent_article_ids(user_id)
+        articles = [a for a in articles if a['url'] not in sent_ids]
+        # 上位3件
         messages = []
-        for article in articles:
+        for article in articles[:3]:
             summary = summarize_article(article['title'], article['summary'])
             messages.append((article['title'], summary, article['url']))
             time.sleep(1)
         send_line_digest(user_id, messages)
+        # historyに保存
+        save_sent_articles(user_id, [a['url'] for a in articles[:3]])
+
+# 追加配信「もっと」用
+def get_more_news(user_id):
+    user_keywords = get_user_keywords(user_id)
+    if not user_keywords:
+        return
+    # キーワードごとに記事取得
+    articles = []
+    for kw, _ in user_keywords:
+        articles.extend(fetch_rss_articles([kw]))
+    # 重複排除
+    seen = set()
+    unique_articles = []
+    for a in articles:
+        if a['url'] not in seen:
+            unique_articles.append(a)
+            seen.add(a['url'])
+    # 既に送信済みの記事を除外
+    sent_ids = get_sent_article_ids(user_id)
+    filtered = [a for a in unique_articles if a['url'] not in sent_ids]
+    # スコアリング
+    scored = [(score_news(a, user_keywords), a) for a in filtered]
+    scored.sort(reverse=True, key=lambda x: x[0])
+    top5 = [a for _, a in scored[:5]]
+    # 要約
+    messages = []
+    for article in top5:
+        summary = summarize_article(article['title'], article['summary'])
+        messages.append((article['title'], summary, article['url']))
+        time.sleep(1)
+    send_line_digest(user_id, messages)
+    # historyに保存
+    save_sent_articles(user_id, [a['url'] for a in top5])
 
 if __name__ == "__main__":
     main()
