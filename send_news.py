@@ -72,8 +72,11 @@ def get_more_news(user_id):
         return
     # キーワードごとに記事取得
     articles = []
-    for kw, _ in user_keywords:
-        articles.extend(fetch_rss_articles([kw]))
+    for kw_tuple in user_keywords:
+        # kw_tupleがタプルで2つ以上の要素を持つ場合のみ
+        if isinstance(kw_tuple, (list, tuple)) and len(kw_tuple) >= 1:
+            kw = kw_tuple[0]
+            articles.extend(fetch_rss_articles([kw]))
     # 重複排除
     seen = set()
     unique_articles = []
