@@ -3,6 +3,7 @@ import os
 from flask import Flask, request
 import requests
 import gspread
+from gspread.exceptions import CellNotFound
 from oauth2client.service_account import ServiceAccountCredentials
 
 from config import LINE_CHANNEL_ACCESS_TOKEN, SHEET_NAME, GOOGLE_SHEET_KEY
@@ -42,7 +43,7 @@ def linewebhook():
                 try:
                     cell = sheet.find(user_id)
                     sheet.update_cell(cell.row, 2, keywords_str)  # 2列目にキーワード
-                except gspread.exceptions.CellNotFound:
+                except CellNotFound:
                     # 新規ユーザーの場合は末尾に追加
                     sheet.append_row([user_id, keywords_str])
 
@@ -53,7 +54,7 @@ def linewebhook():
                 try:
                     cell = sheet.find(user_id)
                     kws = sheet.cell(cell.row, 2).value
-                except gspread.exceptions.CellNotFound:
+                except CellNotFound:
                     kws = ''
                 reply_text = f"現在のキーワード: {kws if kws else '未設定'}"
                 reply_message(event['replyToken'], reply_text)
