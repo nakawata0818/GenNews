@@ -20,23 +20,46 @@ def get_sheet():
         return client.open_by_key(GOOGLE_SHEET_KEY).sheet1
     else:
         return client.open(SHEET_NAME).sheet1
+
 @app.route("/linewebhook", methods=['POST'])
 def linewebhook():
     try:
         events = request.json['events']
-    except Exception as e:
-        print(f"[webhook error] {e}")
+    except Exception:
         return 'ok'
 
-    try:
-        sheet = get_sheet()
-        for event in events:
-            # ...既存の処理...
-            pass
-    except Exception as e:
-        print(f"[sheet error] {e}")
-        # 例外時も必ず200を返す
-        return 'ok'
+    sheet = get_sheet()
+    for event in events:
+        if event['type'] == 'message' and event['message']['type'] == 'text':
+            user_text = event['message']['text']
+            user_id = event['source']['userId']
+
+            if user_text.startswith('キーワード:'):
+                keywords = [k.strip() for k in user_text.replace('キーワード:', '').split(',') if k.strip()]
+                keywords_str = ','.join(keywords)
+
+                # ユーザーIDの行を検索
+                try:
+                    cell = sheet.find(user_id)
+                    sheet.update_cell(cell.row, 2, keywords_str)  # 2列目にキーワード
+                except gspread.exceptions.CellNotFound:
+                    # 新規ユーザーの場合は末尾に追加
+                    sheet.append_row([user_id, keywords_str])
+
+                reply_text = f"キーワードを更新しました:\n{keywords_str}"
+                reply_message(event['replyToken'], reply_text)
+
+            elif user_text.startswith('キーワード確認'):
+                try:
+                    cell = sheet.find(user_id)
+                    kws = sheet.cell(cell.row, 2).value
+                except gspread.exceptions.CellNotFound:
+                    kws = ''
+                reply_text = f"現在のキーワード: {kws if kws else '未設定'}"
+                reply_message(event['replyToken'], reply_text)
+
+            else:
+                reply_message(event['replyToken'], "キーワードを設定するには「キーワード:」で送信してください。")
 
     return 'ok'
 
