@@ -6,7 +6,7 @@ from scoring import score_article
 from rss import fetch_rss_articles
 from dedup import deduplicate_articles
 from summarize_gemini import summarize_article
-from expand_keywords.py import expand_keywords
+from expand_keywords import expand_keywords
 from line_format import create_carousel
 from config import LINE_CHANNEL_ACCESS_TOKEN
 
