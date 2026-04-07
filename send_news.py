@@ -68,7 +68,9 @@ def main():
 # 追加配信「もっと」用
 def get_more_news(user_id):
     user_keywords = get_user_keywords(user_id)
+    print(f"[DEBUG] get_more_news user_keywords: {user_keywords}")
     if not user_keywords:
+        print(f"[DEBUG] get_more_news: user_keywords is empty for user_id={user_id}")
         return
     # キーワードごとに記事取得
     articles = []
