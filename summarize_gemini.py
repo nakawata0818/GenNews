@@ -25,7 +25,7 @@ def summarize_article(title: str, summary: str) -> str:
     client = genai.Client(api_key=GEMINI_API_KEY)
     content = f"タイトル: {title}\n内容: {summary}"
     
-    for i in range(1):  # 最大3回リトライ
+    for i in range(3):  # 最大3回リトライ
         try:
             response = client.models.generate_content(
                 model='gemini-3-flash-preview', contents=PROMPT + "\n" + content)

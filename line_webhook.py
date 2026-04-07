@@ -1,5 +1,5 @@
-
 import os
+import threading
 from flask import Flask, request
 import requests
 import gspread
@@ -60,7 +60,9 @@ def linewebhook():
             print(f"[DEBUG] user_text: {user_text}, user_id: {user_id}")
 
             if user_text == 'もっと':
-                get_more_news(user_id)
+                # 非同期で実行
+                thread = threading.Thread(target=get_more_news, args=(user_id,))
+                thread.start()
                 reply_message(event['replyToken'], '追加ニュースを配信しました')
 
             # (中略: キーワード更新などのロジックは維持)
