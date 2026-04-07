@@ -42,23 +42,25 @@ def linewebhook():
             elif user_text.startswith('いいね:'):
                 # 例: いいね:https://example.com/article
                 article_id = user_text.replace('いいね:', '').strip()
-                # 関連キーワードのweight += 0.2
-                # シンプルに全キーワードを+0.2（実運用では記事内容解析も可）
                 from sheet_utils import get_user_keywords
-                for kw, _ in get_user_keywords(user_id):
-                    update_keyword_weight(user_id, kw, 0.2)
+                for kw_tuple in get_user_keywords(user_id):
+                    if isinstance(kw_tuple, (list, tuple)) and len(kw_tuple) >= 1:
+                        kw = kw_tuple[0]
+                        update_keyword_weight(user_id, kw, 0.2)
                 reply_message(event['replyToken'], f'フィードバックありがとうございました（+）')
             elif user_text.startswith('興味なし:'):
                 article_id = user_text.replace('興味なし:', '').strip()
                 from sheet_utils import get_user_keywords
-                for kw, _ in get_user_keywords(user_id):
-                    update_keyword_weight(user_id, kw, -0.3)
+                for kw_tuple in get_user_keywords(user_id):
+                    if isinstance(kw_tuple, (list, tuple)) and len(kw_tuple) >= 1:
+                        kw = kw_tuple[0]
+                        update_keyword_weight(user_id, kw, -0.3)
                 reply_message(event['replyToken'], f'フィードバックありがとうございました（-）')
             elif user_text.startswith('キーワード:'):
                 keywords = [k.strip() for k in user_text.replace('キーワード:', '').split(',') if k.strip()]
                 keywords_str = ','.join(keywords)
 
-                # ユーザーIDの行を検索
+                # 従来シートにも書き込み（従来のまま）
                 try:
                     cell = sheet.find(user_id)
                     sheet.update_cell(cell.row, 2, keywords_str)  # 2列目にキーワード
@@ -66,6 +68,16 @@ def linewebhook():
                     print(f"[Sheet find error] {e}")
                     # 新規ユーザーの場合は末尾に追加
                     sheet.append_row([user_id, keywords_str])
+
+                # keywordsシートにも1キーワードずつ登録（重複はスキップ）
+                from sheet_utils import get_sheet_by_name
+                kw_sheet = get_sheet_by_name('keywords')
+                existing = kw_sheet.get_all_records()
+                for kw in keywords:
+                    # 既に同じuser_id, keywordがあればスキップ
+                    if any(r.get('user_id') == user_id and r.get('keyword') == kw for r in existing):
+                        continue
+                    kw_sheet.append_row([user_id, kw, 1.0])
 
                 reply_text = f"キーワードを更新しました:\n{keywords_str}"
                 reply_message(event['replyToken'], reply_text)
