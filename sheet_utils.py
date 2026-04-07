@@ -93,18 +93,17 @@ def get_sheet():
     else:
         return client.open(SHEET_NAME).sheet1
 
-def get_user_keywords(user_id):
-    sheet = get_sheet()
-    records = sheet.get_all_records()
-    for row in records:
-        if row['LINE_USER_ID'] == user_id:
-            return [k.strip() for k in row['KEYWORDS'].split(',') if k.strip()]
-    return []
-
-# ユーザーのキーワードを登録・更新
-
 def set_user_keywords(user_id, keywords):
-    sheet = get_sheet()
+    """
+    互換性のために残しますが、基本は update_keyword_weight を推奨。
+    古いsheet1とkeywordsシートの両方に反映させます。
+    """
+    # 1. keywordsシートへの登録
+    for kw in keywords:
+        update_keyword_weight(user_id, kw, 0.0) # 初期値1.0で登録
+    
+    # 2. 古いsheet1への登録（念のため維持）
+    sheet = get_sheet() 
     records = sheet.get_all_records()
     for idx, row in enumerate(records, start=2):  # 1行目はヘッダ
         if row['LINE_USER_ID'] == user_id:

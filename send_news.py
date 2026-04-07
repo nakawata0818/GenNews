@@ -65,25 +65,33 @@ def main():
     records = sheet.get_all_records()
     for row in records:
         user_id = row['LINE_USER_ID']
-        # 既存のキーワード列からキーワードリストを生成
-        keywords = [k.strip() for k in row['KEYWORDS'].split(',') if k.strip()]
-        if not keywords:
+        user_keywords = get_user_keywords(user_id)
+        if not user_keywords:
             continue
-        # 記事取得
-        articles = fetch_rss_articles(keywords)
+        
+        keywords_only = [kw for kw, weight in user_keywords]
+        articles = fetch_rss_articles(keywords_only)
         articles = deduplicate_articles(articles)
+        
         # 既に送信済みの記事を除外
         sent_ids = get_sent_article_ids(user_id)
-        articles = [a for a in articles if a['url'] not in sent_ids]
-        # 上位3件
-        messages = []
-        for article in articles[:3]:
-            summary = summarize_article(article['title'], article['summary'])
-            messages.append((article['title'], summary, article['url']))
+        filtered = [a for a in articles if a['url'] not in sent_ids]
+        
+        # スコアリングして上位3件
+        scored = [(score_article(a, user_keywords), a) for a in filtered]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top_articles = [a for _, a in scored[:3]]
+
+        for article in top_articles:
+            article['summary'] = summarize_article(article['title'], article['summary'])
             time.sleep(1)
-        send_line_digest(user_id, messages)
+        
+        # Flex Message (カルーセル形式) を作成して送信
+        carousel = create_carousel(top_articles)
+        send_line_flex(user_id, carousel)
+
         # historyに保存
-        save_sent_articles(user_id, [a['url'] for a in articles[:3]])
+        save_sent_articles(user_id, [a['url'] for a in top_articles])
 
 # 追加配信「もっと」用
 def get_more_news(user_id):
@@ -109,17 +117,17 @@ def get_more_news(user_id):
     sent_ids = get_sent_article_ids(user_id)
     filtered = [a for a in unique_articles if a['url'] not in sent_ids]
     # スコアリング
-    scored = [(score_news(a, user_keywords), a) for a in filtered]
+    scored = [(score_article(a, user_keywords), a) for a in filtered]
     scored.sort(reverse=True, key=lambda x: x[0])
     top5 = [a for _, a in scored[:5]]
-    # 要約
-    messages = []
+    
     for article in top5:
-        summary = summarize_article(article['title'], article['summary'])
-        messages.append((article['title'], summary, article['url']))
+        article['summary'] = summarize_article(article['title'], article['summary'])
         time.sleep(1)
-    if messages:
-        send_line_digest(user_id, messages)
+
+    if top5:
+        carousel = create_carousel(top5)
+        send_line_flex(user_id, carousel)
         # historyに保存
         save_sent_articles(user_id, [a['url'] for a in top5])
     else:

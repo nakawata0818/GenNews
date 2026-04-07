@@ -9,6 +9,10 @@ def create_news_bubble(article):
     if len(summary) > 100:
         summary = summary[:100] + "..."
     
+    # フィールドが空だと400エラーになるための対策
+    title = title if title.strip() else "No Title"
+    summary = summary if summary.strip() else "No Summary"
+    
     url = article.get('url', 'https://news.google.com')
 
     return {
@@ -41,13 +45,13 @@ def create_news_bubble(article):
                 "type": "button",
                 "style": "secondary",
                 "height": "sm",
-                "action": {"type": "postback", "label": "👍 いいね", "data": f"action=like&url={url}"}
+                "action": {"type": "postback", "label": "👍 いいね", "data": "action=like"}
               },
               {
                 "type": "button",
                 "style": "secondary",
                 "height": "sm",
-                "action": {"type": "postback", "label": "👎 興味なし", "data": f"action=dislike&url={url}"}
+                "action": {"type": "postback", "label": "👎 興味なし", "data": "action=dislike"}
               }
             ]
           },
