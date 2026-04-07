@@ -1,6 +1,6 @@
 # line_format.py
 
-def create_news_bubble(article):
+def create_news_bubble(article, article_id_for_log=None, category_for_log=None):
     """記事1件分のFlex Message Bubbleを生成"""
     title = article.get('title', 'No Title')
     summary = article.get('summary', 'No Summary')
@@ -16,7 +16,12 @@ def create_news_bubble(article):
     url = article.get('url', 'https://news.google.com')
 
     # 記事に関連したキーワードを抽出（postbackデータ用）
+    # matched_kwsはsend_news.pyでarticleに設定される
     matched_kws = ",".join(article.get('matched_keywords', []))
+    
+    # article_idとcategoryはログ保存のために必要
+    article_id = article_id_for_log if article_id_for_log else article.get('url') # URLをIDとして利用
+    category = category_for_log if category_for_log else article.get('category', 'その他')
 
     return {
       "type": "bubble",

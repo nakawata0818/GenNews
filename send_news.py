@@ -6,6 +6,8 @@ from scoring import score_article
 from rss import fetch_rss_articles
 from dedup import deduplicate_articles
 from summarize_gemini import summarize_article
+from feature_extractor import extract_features
+from profile import generate_user_profile # for more news category prioritization
 from expand_keywords import expand_keywords
 from line_format import create_carousel
 from config import LINE_CHANNEL_ACCESS_TOKEN
@@ -68,6 +70,7 @@ def main():
         user_keywords = get_user_keywords(user_id)
         if not user_keywords:
             continue
+        user_profile = generate_user_profile(user_id) # カテゴリ優先度のため
         
         keywords_only = [kw for kw, weight in user_keywords]
         articles = fetch_rss_articles(keywords_only)
@@ -78,22 +81,32 @@ def main():
         filtered = [a for a in articles if a['url'] not in sent_ids]
         
         # スコアリングして上位3件
-        scored = [(score_article(a, user_keywords), a) for a in filtered]
+        # category_scoreのためにuser_profileを渡す
+        scored = [(score_article(a, user_keywords, user_profile), a) for a in filtered]
         scored.sort(key=lambda x: x[0], reverse=True)
         top_articles = [a for _, a in scored[:3]]
 
         for article in top_articles:
+            # 記事の特徴抽出
+            features = extract_features(article)
+            article['extracted_keywords'] = features['keywords']
+            article['category'] = features['category']
+
             # 記事に関連するキーワードを記録
             article['matched_keywords'] = [
-                kw for kw, _ in user_keywords 
-                if kw in article.get('title', '') or kw in article.get('summary', '')
+                kw for kw in article['extracted_keywords']
+                if any(ukw == kw for ukw, _ in user_keywords) # ユーザーの登録キーワードとマッチ
             ]
             article['summary'] = summarize_article(article['title'], article['summary'])
             time.sleep(1)
         
         # Flex Message (カルーセル形式) を作成して送信
-        carousel = create_carousel(top_articles)
+        carousel = create_carousel(top_articles, article_id_for_log=article.get('url'), category_for_log=article.get('category'))
         send_line_flex(user_id, carousel)
+
+        # 記事ログ保存 (Flex Message送信後)
+        for article in top_articles:
+            save_article_log(user_id, article['url'], article['matched_keywords'], article['category'], 'send') # 'send'アクションを追加
 
         # historyに保存
         save_sent_articles(user_id, [a['url'] for a in top_articles])
@@ -105,12 +118,17 @@ def get_more_news(user_id):
     if not user_keywords:
         print(f"[DEBUG] get_more_news: user_keywords is empty for user_id={user_id}")
         return
-    # キーワードごとに記事取得
+    
+    user_profile = generate_user_profile(user_id)
+    
+    # 類義語展開
+    keywords_only = [kw for kw, _ in user_keywords]
+    expanded_keywords = expand_keywords(keywords_only)
+
+    # 記事取得
     articles = []
-    for kw_tuple in user_keywords:
-        if isinstance(kw_tuple, (list, tuple)) and len(kw_tuple) >= 1:
-            kw = kw_tuple[0]
-            articles.extend(fetch_rss_articles([kw]))
+    articles.extend(fetch_rss_articles(expanded_keywords))
+
     # 重複排除
     seen = set()
     unique_articles = []
@@ -118,28 +136,40 @@ def get_more_news(user_id):
         if a['url'] not in seen:
             unique_articles.append(a)
             seen.add(a['url'])
+
     # 既に送信済みの記事を除外
     sent_ids = get_sent_article_ids(user_id)
     filtered = [a for a in unique_articles if a['url'] not in sent_ids]
-    # スコアリング
-    scored = [(score_article(a, user_keywords), a) for a in filtered]
+    
+    # 記事の特徴抽出とスコアリング
+    processed_articles = []
+    for article in filtered:
+        features = extract_features(article)
+        article['extracted_keywords'] = features['keywords']
+        article['category'] = features['category']
+        processed_articles.append(article)
+
+    scored = [(score_article(a, user_keywords, user_profile), a) for a in processed_articles]
     scored.sort(reverse=True, key=lambda x: x[0])
     top5 = [a for _, a in scored[:5]]
     
     for article in top5:
         # 記事に関連するキーワードを記録
         article['matched_keywords'] = [
-            kw for kw, _ in user_keywords 
-            if kw in article.get('title', '') or kw in article.get('summary', '')
+            kw for kw in article['extracted_keywords']
+            if any(ukw == kw for ukw, _ in user_keywords)
         ]
         article['summary'] = summarize_article(article['title'], article['summary'])
         time.sleep(1)
 
     if top5:
-        carousel = create_carousel(top5)
+        carousel = create_carousel(top5, article_id_for_log=article.get('url'), category_for_log=article.get('category'))
         send_line_flex(user_id, carousel)
         # historyに保存
         save_sent_articles(user_id, [a['url'] for a in top5])
+        # 記事ログ保存
+        for article in top5:
+            save_article_log(user_id, article['url'], article['matched_keywords'], article['category'], 'send')
     else:
         # 新しい記事がなければ通知
         from config import LINE_CHANNEL_ACCESS_TOKEN

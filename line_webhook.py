@@ -3,11 +3,13 @@ import threading
 from flask import Flask, request
 import requests
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from oauth2client.service_account import ServiceAccountCredentials # Keep for get_sheet()
 
 from config import LINE_CHANNEL_ACCESS_TOKEN, SHEET_NAME, GOOGLE_SHEET_KEY
-from sheet_utils import setup_google_credentials, update_keyword_weight
+from sheet_utils import setup_google_credentials, update_keyword_weight, save_article_log, get_sheet_by_name, set_user_keywords
 from send_news import get_more_news, send_line_flex
+from feature_extractor import extract_features
+from profile import generate_user_profile, generate_profile_summary
 
 app = Flask(__name__)
 
@@ -38,24 +40,43 @@ def linewebhook():
             # クエリパラメータの簡易解析 (action=like&kws=AI,経済)
             params = {kv.split('=')[0]: kv.split('=')[1] for kv in data.split('&') if '=' in kv}
             action = params.get('action')
-            target_kws = params.get('kws', '').split(',')
+            target_kws_str = params.get('kws', '')
+            target_kws = [kw.strip() for kw in target_kws_str.split(',') if kw.strip()]
+            article_id = params.get('article_id') # article_idも取得するように変更
+            category = params.get('category', 'その他') # categoryも取得
 
-            if "action=like" in data:
+            if action == "like":
                 for kw in target_kws:
                     if kw: update_keyword_weight(user_id, kw, 0.2)
-                reply_message(event['replyToken'], f"「{','.join(target_kws)}」の関心度を上げました👍")
+                # 記事ログ保存
+                if article_id:
+                    save_article_log(user_id, article_id, target_kws, category, action)
+                reply_message(event['replyToken'], f"「{target_kws_str}」の関心度を上げました👍")
             
-            elif "action=dislike" in data:
+            elif action == "dislike":
                 for kw in target_kws:
                     if kw: update_keyword_weight(user_id, kw, -0.3)
-                reply_message(event['replyToken'], f"「{','.join(target_kws)}」の関心度を下げました👎")
+                # 記事ログ保存
+                if article_id:
+                    save_article_log(user_id, article_id, target_kws, category, action)
+                reply_message(event['replyToken'], f"「{target_kws_str}」の関心度を下げました👎")
                 
-            elif "action=more" in data:
+            elif action == "more":
                 # タイムアウト回避のためスレッドで実行
                 thread = threading.Thread(target=get_more_news, args=(user_id,))
                 thread.start()
                 # 先に受領メッセージだけ返す
                 reply_message(event['replyToken'], "追加のニュースを探しています...少々お待ちください。")
+            
+            elif action == "click":
+                # 記事ログ保存
+                if article_id and params.get('url'):
+                    save_article_log(user_id, article_id, target_kws, category, action)
+                    # ユーザーに直接URLを開かせる
+                    # LINEのFlex MessageのURIアクションは直接開くため、ここでは何もしない
+                    # reply_message(event['replyToken'], "記事を開きます。") # これは不要
+                    pass
+                # URIアクションを直接開くため、ここではreplyは不要
                 
             continue
 
@@ -72,42 +93,32 @@ def linewebhook():
                 reply_message(event['replyToken'], '追加ニュースを配信しました')
 
             # (中略: キーワード更新などのロジックは維持)
-
             elif user_text.startswith('キーワード:'):
                 keywords = [k.strip() for k in user_text.replace('キーワード:', '').split(',') if k.strip()]
                 keywords_str = ','.join(keywords)
 
-                # 従来シートにも書き込み（従来のまま）
-                try:
-                    cell = sheet.find(user_id)
-                    sheet.update_cell(cell.row, 2, keywords_str)  # 2列目にキーワード
-                except Exception as e:
-                    print(f"[Sheet find error] {e}")
-                    # 新規ユーザーの場合は末尾に追加
-                    sheet.append_row([user_id, keywords_str])
-
-                # keywordsシートにも1キーワードずつ登録（重複はスキップ）
-                from sheet_utils import get_sheet_by_name
-                kw_sheet = get_sheet_by_name('keywords')
-                existing = kw_sheet.get_all_records()
-                for kw in keywords:
-                    # 既に同じuser_id, keywordがあればスキップ
-                    if any(r.get('user_id') == user_id and r.get('keyword') == kw for r in existing):
-                        continue
-                    kw_sheet.append_row([user_id, kw, 1.0])
+                set_user_keywords(user_id, keywords) # sheet_utilsの関数を使用
 
                 reply_text = f"キーワードを更新しました:\n{keywords_str}"
                 reply_message(event['replyToken'], reply_text)
 
             elif user_text.startswith('キーワード確認'):
                 try:
-                    cell = sheet.find(user_id)
-                    kws = sheet.cell(cell.row, 2).value
+                    # keywordsシートから取得
+                    user_kws_with_weight = get_user_keywords(user_id)
+                    kws = ", ".join([f"{kw}({weight})" for kw, weight in user_kws_with_weight])
                 except Exception as e:
                     print(f"[Sheet find error] {e}")
                     kws = ''
                 reply_text = f"現在のキーワード: {kws if kws else '未設定'}"
                 reply_message(event['replyToken'], reply_text)
+            
+            elif user_text == '傾向':
+                profile = generate_user_profile(user_id)
+                summary = generate_profile_summary(profile)
+                reply_message(event['replyToken'], summary)
+                # TODO: プロファイルフィードバックボタンの追加
+                # reply_message(event['replyToken'], summary, buttons_for_profile_feedback)
 
             else:
                 reply_message(event['replyToken'], "キーワードを設定するには「キーワード:AI,経済」のように送信してください。\nニュース内の👍👎ボタンで学習します。")

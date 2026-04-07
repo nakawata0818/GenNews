@@ -1,6 +1,7 @@
 # scoring.py
 # 精度強化版スコアリング関数
 
+from typing import List, Dict, Tuple
 from datetime import datetime, timezone
 import re
 
@@ -12,9 +13,9 @@ SOURCE_SCORES = {
     "その他": 0.7
 }
 
-def score_article(article, user_keywords):
+def score_article(article: Dict, user_keywords: List[Tuple[str, float]], user_profile: Dict = None) -> float:
     """
-    指示書の計算式: score = (keyword_score * 0.5 + freshness_score * 0.3 + source_score * 0.2)
+    指示書の計算式: score = (keyword_score * 0.4 + category_score * 0.3 + freshness_score * 0.2 + source_score * 0.1)
     article: {'title', 'summary', 'url', 'published', ...}
     user_keywords: [(keyword, weight), ...]
     """
@@ -50,7 +51,17 @@ def score_article(article, user_keywords):
         source_name = source_match.group(1).strip()
         source_val = SOURCE_SCORES.get(source_name, SOURCE_SCORES["その他"])
 
-    final_score = (kw_score * 0.5) + (freshness * 0.3) + (source_val * 0.2)
+    # 4. category_score
+    category_score = 0.0
+    if user_profile and article.get('category'):
+        # user_profile["categories"]は{'技術': 12, 'ビジネス': 3}のような形式
+        # 記事のカテゴリがユーザープロファイルにある場合、そのカウントをスコアに反映
+        # カウントをそのまま使うと大きくなりすぎる可能性があるので、正規化するか、上限を設ける
+        category_score = user_profile["categories"].get(article['category'], 0)
+        # 例: 最大10件で1.0、それ以上は1.0
+        category_score = min(1.0, category_score / 10.0)
+
+    final_score = (kw_score * 0.4) + (category_score * 0.3) + (freshness * 0.2) + (source_val * 0.1)
     return final_score
 
 def score_news(article, user_keywords):

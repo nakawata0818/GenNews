@@ -35,6 +35,20 @@ def save_sent_articles(user_id, article_ids):
     for aid in article_ids:
         sheet.append_row([user_id, aid])
 
+def save_article_log(user_id, article_id, keywords, category, action):
+    """
+    article_logシートにユーザー行動ログを保存
+    """
+    sheet = get_sheet_by_name('article_log')
+    timestamp = datetime.now(timezone.utc).isoformat() # ISO 8601形式
+    # keywordsはリストで渡されるのでカンマ区切り文字列に変換
+    keywords_str = ",".join(keywords) if isinstance(keywords, list) else keywords
+    sheet.append_row([user_id, article_id, keywords_str, category, action, timestamp])
+
+    # user_profileシートのキャッシュ更新（簡易版、後で最適化）
+    # ここでは直接更新せず、profile.pyで集計する前提
+    pass
+
 def update_keyword_weight(user_id, keyword, delta):
     """
     keywordsシートのweightを増減。なければ新規追加。
@@ -95,19 +109,8 @@ def get_sheet():
 
 def set_user_keywords(user_id, keywords):
     """
-    互換性のために残しますが、基本は update_keyword_weight を推奨。
-    古いsheet1とkeywordsシートの両方に反映させます。
+    ユーザーのキーワードを登録・更新 (keywordsシートのみを更新)
     """
     # 1. keywordsシートへの登録
     for kw in keywords:
         update_keyword_weight(user_id, kw, 0.0) # 初期値1.0で登録
-    
-    # 2. 古いsheet1への登録（念のため維持）
-    sheet = get_sheet() 
-    records = sheet.get_all_records()
-    for idx, row in enumerate(records, start=2):  # 1行目はヘッダ
-        if row['LINE_USER_ID'] == user_id:
-            sheet.update_cell(idx, 2, ','.join(keywords))
-            return
-    # 新規
-    sheet.append_row([user_id, ','.join(keywords)])
