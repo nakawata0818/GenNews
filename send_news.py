@@ -73,7 +73,6 @@ def get_more_news(user_id):
     # キーワードごとに記事取得
     articles = []
     for kw_tuple in user_keywords:
-        # kw_tupleがタプルで2つ以上の要素を持つ場合のみ
         if isinstance(kw_tuple, (list, tuple)) and len(kw_tuple) >= 1:
             kw = kw_tuple[0]
             articles.extend(fetch_rss_articles([kw]))
@@ -97,9 +96,38 @@ def get_more_news(user_id):
         summary = summarize_article(article['title'], article['summary'])
         messages.append((article['title'], summary, article['url']))
         time.sleep(1)
-    send_line_digest(user_id, messages)
-    # historyに保存
-    save_sent_articles(user_id, [a['url'] for a in top5])
+    if messages:
+        send_line_digest(user_id, messages)
+        # historyに保存
+        save_sent_articles(user_id, [a['url'] for a in top5])
+    else:
+        # 新しい記事がなければ通知
+        from config import LINE_CHANNEL_ACCESS_TOKEN
+        headers = {
+            "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+            "Content-Type": "application/json"
+        }
+        data = {
+            "to": user_id,
+            "messages": [
+                {
+                    "type": "text",
+                    "text": "新しいニュースはありません"
+                }
+            ]
+        }
+        try:
+            import requests
+            response = requests.post(
+                "https://api.line.me/v2/bot/message/push",
+                headers=headers,
+                json=data
+            )
+            print(f"[LINE] status: {response.status_code}")
+            if response.status_code != 200:
+                print(response.text)
+        except Exception as e:
+            print(f"[LINE error] {e}")
 
 if __name__ == "__main__":
     main()
