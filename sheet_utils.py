@@ -5,8 +5,10 @@ def get_user_keywords(user_id):
     """
     sheet = get_sheet_by_name('keywords')
     records = sheet.get_all_records()
+    print(f"[DEBUG] keywords records: {records}")
     result = []
     for row in records:
+        print(f"[DEBUG] row: {row}")
         if row.get('user_id') == user_id:
             kw = row.get('keyword')
             try:
@@ -14,6 +16,7 @@ def get_user_keywords(user_id):
             except Exception:
                 weight = 1.0
             result.append((kw, weight))
+    print(f"[DEBUG] get_user_keywords({user_id}) -> {result}")
     return result
 
 def get_sent_article_ids(user_id):
@@ -51,10 +54,13 @@ def update_keyword_weight(user_id, keyword, delta):
     sheet.append_row([user_id, keyword, max(0.0, 1.0 + delta)])
 
 def get_sheet_by_name(name):
+    print(f"[DEBUG] get_sheet_by_name({name})")
     creds_path = setup_google_credentials()
     creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, SCOPE)
     client = gspread.authorize(creds)
-    return client.open_by_key(GOOGLE_SHEET_KEY).worksheet(name)
+    sheet = client.open_by_key(GOOGLE_SHEET_KEY).worksheet(name)
+    print(f"[DEBUG] sheet columns: {sheet.row_values(1)}")
+    return sheet
 
 import os
 import gspread

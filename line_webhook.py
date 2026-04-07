@@ -34,6 +34,7 @@ def linewebhook():
         if event['type'] == 'message' and event['message']['type'] == 'text':
             user_text = event['message']['text']
             user_id = event['source']['userId']
+            print(f"[DEBUG] user_text: {user_text}, user_id: {user_id}")
 
             if user_text == 'もっと':
                 get_more_news(user_id)
