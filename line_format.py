@@ -15,6 +15,9 @@ def create_news_bubble(article):
     
     url = article.get('url', 'https://news.google.com')
 
+    # 記事に関連したキーワードを抽出（postbackデータ用）
+    matched_kws = ",".join(article.get('matched_keywords', []))
+
     return {
       "type": "bubble",
       "body": {
@@ -45,13 +48,13 @@ def create_news_bubble(article):
                 "type": "button",
                 "style": "secondary",
                 "height": "sm",
-                "action": {"type": "postback", "label": "👍 いいね", "data": "action=like"}
+                "action": {"type": "postback", "label": "👍 いいね", "data": f"action=like&kws={matched_kws}"}
               },
               {
                 "type": "button",
                 "style": "secondary",
                 "height": "sm",
-                "action": {"type": "postback", "label": "👎 興味なし", "data": "action=dislike"}
+                "action": {"type": "postback", "label": "👎 興味なし", "data": f"action=dislike&kws={matched_kws}"}
               }
             ]
           },

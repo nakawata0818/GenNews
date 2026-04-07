@@ -34,22 +34,28 @@ def linewebhook():
         if event['type'] == 'postback':
             data = event['postback']['data']
             user_id = event['source']['userId']
-            from sheet_utils import get_user_keywords
             
+            # クエリパラメータの簡易解析 (action=like&kws=AI,経済)
+            params = {kv.split('=')[0]: kv.split('=')[1] for kv in data.split('&') if '=' in kv}
+            action = params.get('action')
+            target_kws = params.get('kws', '').split(',')
+
             if "action=like" in data:
-                for kw, _ in get_user_keywords(user_id):
-                    update_keyword_weight(user_id, kw, 0.2)
-                reply_message(event['replyToken'], "フィードバックありがとうございます！より興味に近いニュースをお届けします (+)")
+                for kw in target_kws:
+                    if kw: update_keyword_weight(user_id, kw, 0.2)
+                reply_message(event['replyToken'], f"「{','.join(target_kws)}」の関心度を上げました👍")
             
             elif "action=dislike" in data:
-                for kw, _ in get_user_keywords(user_id):
-                    update_keyword_weight(user_id, kw, -0.3)
-                reply_message(event['replyToken'], "フィードバックありがとうございます。このトピックの頻度を減らします (-)")
+                for kw in target_kws:
+                    if kw: update_keyword_weight(user_id, kw, -0.3)
+                reply_message(event['replyToken'], f"「{','.join(target_kws)}」の関心度を下げました👎")
                 
             elif "action=more" in data:
-                get_more_news(user_id)
-                # 返信は get_more_news 内でFlexとして送られるか、必要に応じてreplyを送る
-                # reply_message(event['replyToken'], "追加ニュースを探しています...")
+                # タイムアウト回避のためスレッドで実行
+                thread = threading.Thread(target=get_more_news, args=(user_id,))
+                thread.start()
+                # 先に受領メッセージだけ返す
+                reply_message(event['replyToken'], "追加のニュースを探しています...少々お待ちください。")
                 
             continue
 

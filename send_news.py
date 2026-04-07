@@ -83,6 +83,11 @@ def main():
         top_articles = [a for _, a in scored[:3]]
 
         for article in top_articles:
+            # 記事に関連するキーワードを記録
+            article['matched_keywords'] = [
+                kw for kw, _ in user_keywords 
+                if kw in article.get('title', '') or kw in article.get('summary', '')
+            ]
             article['summary'] = summarize_article(article['title'], article['summary'])
             time.sleep(1)
         
@@ -122,6 +127,11 @@ def get_more_news(user_id):
     top5 = [a for _, a in scored[:5]]
     
     for article in top5:
+        # 記事に関連するキーワードを記録
+        article['matched_keywords'] = [
+            kw for kw, _ in user_keywords 
+            if kw in article.get('title', '') or kw in article.get('summary', '')
+        ]
         article['summary'] = summarize_article(article['title'], article['summary'])
         time.sleep(1)
 
