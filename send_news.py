@@ -2,13 +2,33 @@ import os
 import time
 import requests
 from sheet_utils import get_user_keywords, get_sheet, get_sent_article_ids, save_sent_articles
-from scoring import score_news
+from scoring import score_article
 from rss import fetch_rss_articles
 from dedup import deduplicate_articles
 from summarize_gemini import summarize_article
+from expand_keywords.py import expand_keywords
+from line_format import create_carousel
 from config import LINE_CHANNEL_ACCESS_TOKEN
 
-def send_line_digest(user_id, messages):
+def send_line_flex(user_id, flex_json):
+    """Flex MessageをLINEに送信"""
+    if not flex_json:
+        return
+    headers = {
+        "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "to": user_id,
+        "messages": [flex_json]
+    }
+    try:
+        response = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=data)
+        print(f"[LINE Flex] status: {response.status_code}")
+    except Exception as e:
+        print(f"[LINE Flex error] {e}")
+
+def send_line_digest(user_id, messages): # 既存互換用
     if not messages:
         return
     text = f"【本日の厳選ニュース（{len(messages)}件）】\n\n"

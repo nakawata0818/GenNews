@@ -7,10 +7,9 @@ from oauth2client.service_account import ServiceAccountCredentials
 
 from config import LINE_CHANNEL_ACCESS_TOKEN, SHEET_NAME, GOOGLE_SHEET_KEY
 from sheet_utils import setup_google_credentials, update_keyword_weight
-from send_news import get_more_news
+from send_news import get_more_news, send_line_flex
 
 app = Flask(__name__)
-
 
 def get_sheet():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -31,6 +30,30 @@ def linewebhook():
 
     sheet = get_sheet()
     for event in events:
+        # 1. Postback処理 (👍👎ボタンなどの操作)
+        if event['type'] == 'postback':
+            data = event['postback']['data']
+            user_id = event['source']['userId']
+            from sheet_utils import get_user_keywords
+            
+            if "action=like" in data:
+                for kw, _ in get_user_keywords(user_id):
+                    update_keyword_weight(user_id, kw, 0.2)
+                reply_message(event['replyToken'], "フィードバックありがとうございます！より興味に近いニュースをお届けします (+)")
+            
+            elif "action=dislike" in data:
+                for kw, _ in get_user_keywords(user_id):
+                    update_keyword_weight(user_id, kw, -0.3)
+                reply_message(event['replyToken'], "フィードバックありがとうございます。このトピックの頻度を減らします (-)")
+                
+            elif "action=more" in data:
+                get_more_news(user_id)
+                # 返信は get_more_news 内でFlexとして送られるか、必要に応じてreplyを送る
+                # reply_message(event['replyToken'], "追加ニュースを探しています...")
+                
+            continue
+
+        # 2. メッセージ処理
         if event['type'] == 'message' and event['message']['type'] == 'text':
             user_text = event['message']['text']
             user_id = event['source']['userId']
@@ -39,23 +62,9 @@ def linewebhook():
             if user_text == 'もっと':
                 get_more_news(user_id)
                 reply_message(event['replyToken'], '追加ニュースを配信しました')
-            elif user_text.startswith('いいね:'):
-                # 例: いいね:https://example.com/article
-                article_id = user_text.replace('いいね:', '').strip()
-                from sheet_utils import get_user_keywords
-                for kw_tuple in get_user_keywords(user_id):
-                    if isinstance(kw_tuple, (list, tuple)) and len(kw_tuple) >= 1:
-                        kw = kw_tuple[0]
-                        update_keyword_weight(user_id, kw, 0.2)
-                reply_message(event['replyToken'], f'フィードバックありがとうございました（+）')
-            elif user_text.startswith('興味なし:'):
-                article_id = user_text.replace('興味なし:', '').strip()
-                from sheet_utils import get_user_keywords
-                for kw_tuple in get_user_keywords(user_id):
-                    if isinstance(kw_tuple, (list, tuple)) and len(kw_tuple) >= 1:
-                        kw = kw_tuple[0]
-                        update_keyword_weight(user_id, kw, -0.3)
-                reply_message(event['replyToken'], f'フィードバックありがとうございました（-）')
+
+            # (中略: キーワード更新などのロジックは維持)
+
             elif user_text.startswith('キーワード:'):
                 keywords = [k.strip() for k in user_text.replace('キーワード:', '').split(',') if k.strip()]
                 keywords_str = ','.join(keywords)
@@ -93,7 +102,7 @@ def linewebhook():
                 reply_message(event['replyToken'], reply_text)
 
             else:
-                reply_message(event['replyToken'], "キーワードを設定するには「キーワード:」で送信してください。\n追加配信は「もっと」、フィードバックは「いいね:URL」「興味なし:URL」で送信してください。")
+                reply_message(event['replyToken'], "キーワードを設定するには「キーワード:AI,経済」のように送信してください。\nニュース内の👍👎ボタンで学習します。")
 
     return 'ok'
 
