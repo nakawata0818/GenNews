@@ -6,7 +6,7 @@
 ## 2. システムアーキテクチャ
 - **Backend**: Flask (Renderデプロイ)
 - **Database**: Google Sheets (ユーザー管理、キーワード重み、送信履歴)
-- **AI**: Gemini 3.0 Flash preview (ニュース要約)
+- **AI**: Gemini 1.5 Flash (ニュース要約)
 - **Interface**: LINE Messaging API (Flex Message / Carousel, Postback Actions)
 - **Automation**: GitHub Actions (定期実行スクリプト)
 

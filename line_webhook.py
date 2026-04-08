@@ -1,6 +1,7 @@
 import os
 import threading
 from flask import Flask, request
+from urllib.parse import parse_qs
 import requests
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials # Keep for get_sheet()
@@ -23,6 +24,14 @@ def get_sheet():
     else:
         return client.open(SHEET_NAME).sheet1
 
+def safe_get_more_news(user_id):
+    """スレッド内でエラーが起きてもプロセスを落とさずログを出す"""
+    try:
+        print(f"[THREAD] get_more_news started for {user_id}")
+        get_more_news(user_id)
+    except Exception as e:
+        print(f"[THREAD ERROR] get_more_news: {e}")
+
 @app.route("/linewebhook", methods=['POST'])
 def linewebhook():
     try:
@@ -38,7 +47,8 @@ def linewebhook():
             user_id = event['source']['userId']
             
             # クエリパラメータの簡易解析 (action=like&kws=AI,経済)
-            params = {kv.split('=')[0]: kv.split('=')[1] for kv in data.split('&') if '=' in kv}
+            parsed_data = parse_qs(data)
+            params = {k: v[0] for k, v in parsed_data.items()}
             action = params.get('action')
             target_kws_str = params.get('kws', '')
             target_kws = [kw.strip() for kw in target_kws_str.split(',') if kw.strip()]
@@ -63,7 +73,7 @@ def linewebhook():
                 
             elif action == "more":
                 # タイムアウト回避のためスレッドで実行
-                thread = threading.Thread(target=get_more_news, args=(user_id,))
+                thread = threading.Thread(target=safe_get_more_news, args=(user_id,))
                 thread.start()
                 # 先に受領メッセージだけ返す
                 reply_message(event['replyToken'], "追加のニュースを探しています...少々お待ちください。")
@@ -88,7 +98,7 @@ def linewebhook():
 
             if user_text == 'もっと':
                 # 非同期で実行
-                thread = threading.Thread(target=get_more_news, args=(user_id,))
+                thread = threading.Thread(target=safe_get_more_news, args=(user_id,))
                 thread.start()
                 reply_message(event['replyToken'], '追加ニュースを配信しました')
 
