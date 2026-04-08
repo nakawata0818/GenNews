@@ -53,13 +53,13 @@ def create_news_bubble(article, article_id_for_log=None, category_for_log=None):
                 "type": "button",
                 "style": "secondary",
                 "height": "sm",
-                "action": {"type": "postback", "label": "👍 いいね", "data": f"action=like&kws={matched_kws}"}
+                "action": {"type": "postback", "label": "👍 いいね", "data": f"action=like&article_id={article_id}&kws={matched_kws}&category={category}"}
               },
               {
                 "type": "button",
                 "style": "secondary",
                 "height": "sm",
-                "action": {"type": "postback", "label": "👎 興味なし", "data": f"action=dislike&kws={matched_kws}"}
+                "action": {"type": "postback", "label": "👎 興味なし", "data": f"action=dislike&article_id={article_id}&kws={matched_kws}&category={category}"}
               }
             ]
           },

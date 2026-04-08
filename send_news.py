@@ -1,7 +1,7 @@
 import os
 import time
 import requests
-from sheet_utils import get_user_keywords, get_sheet, get_sent_article_ids, save_sent_articles
+from sheet_utils import get_user_keywords, get_sheet, get_sent_article_ids, save_sent_articles, save_article_log
 from scoring import score_article
 from rss import fetch_rss_articles
 from dedup import deduplicate_articles
@@ -101,7 +101,7 @@ def main():
             time.sleep(1)
         
         # Flex Message (カルーセル形式) を作成して送信
-        carousel = create_carousel(top_articles, article_id_for_log=article.get('url'), category_for_log=article.get('category'))
+        carousel = create_carousel(top_articles)
         send_line_flex(user_id, carousel)
 
         # 記事ログ保存 (Flex Message送信後)
@@ -163,7 +163,7 @@ def get_more_news(user_id):
         time.sleep(1)
 
     if top5:
-        carousel = create_carousel(top5, article_id_for_log=article.get('url'), category_for_log=article.get('category'))
+        carousel = create_carousel(top5)
         send_line_flex(user_id, carousel)
         # historyに保存
         save_sent_articles(user_id, [a['url'] for a in top5])

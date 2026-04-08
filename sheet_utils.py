@@ -1,3 +1,13 @@
+import os
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+import tempfile
+import base64
+from datetime import datetime, timezone
+from config import GOOGLE_SHEET_KEY, SHEET_NAME, GOOGLE_SHEETS_CRED_JSON
+
+SCOPE = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+
 def get_user_keywords(user_id):
     """
     keywordsシートからユーザーのキーワードと重みを取得
@@ -75,15 +85,6 @@ def get_sheet_by_name(name):
     sheet = client.open_by_key(GOOGLE_SHEET_KEY).worksheet(name)
     print(f"[DEBUG] sheet columns: {sheet.row_values(1)}")
     return sheet
-
-import os
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-import tempfile
-import base64
-from config import GOOGLE_SHEET_KEY, SHEET_NAME, GOOGLE_SHEETS_CRED_JSON
-
-SCOPE = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
 
 def setup_google_credentials():
     b64 = os.getenv("GOOGLE_CREDENTIALS_BASE64")
