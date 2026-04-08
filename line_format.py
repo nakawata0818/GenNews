@@ -23,6 +23,11 @@ def create_news_bubble(article, article_id_for_log=None, category_for_log=None):
     article_id = article_id_for_log if article_id_for_log else article.get('url') # URLをIDとして利用
     category = category_for_log if category_for_log else article.get('category', 'その他')
 
+    # LINE Postback data 300文字制限対策
+    # article_id (URL) が長すぎる場合、ログ記録用に末尾をカットするか、
+    # データの構成を最小限にする。ここではURLそのものをdataに入れすぎないように調整。
+    short_id = article_id[:150] if article_id else ""
+
     return {
       "type": "bubble",
       "body": {
@@ -53,13 +58,13 @@ def create_news_bubble(article, article_id_for_log=None, category_for_log=None):
                 "type": "button",
                 "style": "secondary",
                 "height": "sm",
-                "action": {"type": "postback", "label": "👍 いいね", "data": f"action=like&article_id={article_id}&kws={matched_kws}&category={category}"}
+                "action": {"type": "postback", "label": "👍 いいね", "data": f"action=like&article_id={short_id}&kws={matched_kws}&category={category}"}
               },
               {
                 "type": "button",
                 "style": "secondary",
                 "height": "sm",
-                "action": {"type": "postback", "label": "👎 興味なし", "data": f"action=dislike&article_id={article_id}&kws={matched_kws}&category={category}"}
+                "action": {"type": "postback", "label": "👎 興味なし", "data": f"action=dislike&article_id={short_id}&kws={matched_kws}&category={category}"}
               }
             ]
           },
