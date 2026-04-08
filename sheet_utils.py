@@ -15,11 +15,13 @@ def get_user_keywords(user_id):
     """
     sheet = get_sheet_by_name('keywords')
     records = sheet.get_all_records()
-    print(f"[DEBUG] keywords records: {records}")
+    if records:
+        print(f"[DEBUG] keywords headers found: {list(records[0].keys())}")
+    
     result = []
     for row in records:
-        print(f"[DEBUG] row: {row}")
-        if row.get('user_id') == user_id:
+        # user_id のキーが存在し、かつ値が一致するか（文字列として比較）
+        if str(row.get('user_id', '')).strip() == str(user_id).strip():
             kw = row.get('keyword')
             try:
                 weight = float(row.get('weight', 1.0))
@@ -72,7 +74,8 @@ def update_keyword_weight(user_id, keyword, delta):
             except Exception:
                 weight = 1.0
             new_weight = max(0.0, weight + delta)
-            sheet.update_cell(idx, 3, new_weight)
+            # 列番号を間違えないよう注意（1:user_id, 2:keyword, 3:weight想定）
+            sheet.update_cell(idx, 3, float(new_weight))
             return
     # 新規
     sheet.append_row([user_id, keyword, max(0.0, 1.0 + delta)])
