@@ -45,7 +45,35 @@ def save_sent_articles(user_id, article_ids):
     """
     sheet = get_sheet_by_name('history')
     for aid in article_ids:
-        sheet.append_row([user_id, aid])
+        sheet.append_row([user_id, aid, datetime.now(timezone.utc).isoformat()])
+
+def get_all_user_ids():
+    """keywordsシートからユニークなユーザーID一覧を取得"""
+    sheet = get_sheet_by_name('keywords')
+    records = sheet.get_all_records()
+    user_ids = set()
+    for row in records:
+        uid = str(row.get('user_id', '')).strip()
+        if uid:
+            user_ids.add(uid)
+    return list(user_ids)
+
+def get_category_map():
+    """category_mapシートから全マッピングを取得"""
+    try:
+        sheet = get_sheet_by_name('category_map')
+        records = sheet.get_all_records()
+        return {row['keyword']: row['category'] for row in records}
+    except Exception:
+        return {}
+
+def save_category_mapping(keyword, category):
+    """category_mapシートに新しい分類を保存"""
+    try:
+        sheet = get_sheet_by_name('category_map')
+        sheet.append_row([keyword, category])
+    except Exception as e:
+        print(f"[sheet_utils error] save_category_mapping: {e}")
 
 def save_article_log(user_id, article_id, keywords, category, action):
     """
@@ -101,15 +129,6 @@ def setup_google_credentials():
         return GOOGLE_SHEETS_CRED_JSON
     else:
         raise Exception("Google認証情報が設定されていません")
-
-def get_sheet():
-    creds_path = setup_google_credentials()
-    creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, SCOPE)
-    client = gspread.authorize(creds)
-    if GOOGLE_SHEET_KEY:
-        return client.open_by_key(GOOGLE_SHEET_KEY).sheet1
-    else:
-        return client.open(SHEET_NAME).sheet1
 
 def set_user_keywords(user_id, keywords):
     """

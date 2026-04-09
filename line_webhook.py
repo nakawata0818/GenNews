@@ -14,16 +14,6 @@ from profile import generate_user_profile, generate_profile_summary
 
 app = Flask(__name__)
 
-def get_sheet():
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    creds_path = setup_google_credentials()
-    creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, scope)
-    client = gspread.authorize(creds)
-    if GOOGLE_SHEET_KEY:
-        return client.open_by_key(GOOGLE_SHEET_KEY).sheet1
-    else:
-        return client.open(SHEET_NAME).sheet1
-
 def safe_get_more_news(user_id):
     """スレッド内でエラーが起きてもプロセスを落とさずログを出す"""
     try:
@@ -39,7 +29,6 @@ def linewebhook():
     except Exception:
         return 'ok'
 
-    sheet = get_sheet()
     for event in events:
         # 1. Postback処理 (👍👎ボタンなどの操作)
         if event['type'] == 'postback':
