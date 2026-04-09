@@ -12,12 +12,10 @@ def create_news_bubble(article):
     if len(summary) > 100:
         summary = summary[:100] + "..."
     
-    # フィールドが空だと400エラーになるための対策
-    prefix = f"【{category}】"
-    if delivery_label:
-        prefix += f"{delivery_label} "
+    # 表示ラベルの構築 【カテゴリ｜ラベル】
+    label_part = f"｜{delivery_label}" if delivery_label else ""
+    display_title = f"【{category}{label_part}】\n{title}"
 
-    display_title = f"{prefix}{title}"
     title = display_title if display_title.strip() else "No Title"
     summary = summary if summary.strip() else "No Summary"
     

@@ -1,5 +1,6 @@
 import os
 import time
+import random
 import requests
 from sheet_utils import get_user_keywords, get_all_user_ids, get_sent_article_ids, save_sent_articles, save_article_log, get_sheet_by_name
 from scoring import score_article
@@ -63,6 +64,42 @@ def send_line_digest(user_id, messages): # 既存互換用
     except Exception as e:
         print(f"[LINE error] {e}")
 
+def select_311_articles(processed_list, sent_ids, user_logs):
+    """
+    指示書の3:1:1構成で記事を選定する
+    processed_list: [(score, article), ...]
+    """
+    now = datetime.now(timezone.utc)
+    
+    # 評価済み記事（like/dislike）のURL
+    feedback_urls = {l.get('article_id') for l in user_logs if l.get('action') in ['like', 'dislike']}
+    # dislikeされたURLとその時間
+    disliked_info = {l.get('article_id'): datetime.fromisoformat(l.get('timestamp').replace('Z', '+00:00')) 
+                     for l in user_logs if l.get('action') == 'dislike'}
+
+    # 1. おすすめ (Top 3) - 未送信のみ
+    recommended_candidates = [(s, a) for s, a in processed_list if a['url'] not in sent_ids]
+    recommended_candidates.sort(key=lambda x: x[0], reverse=True)
+    liked = [a for s, a in recommended_candidates[:3]]
+    for a in liked: a['delivery_label'] = "おすすめ"
+
+    # 2. 探索 (1件) - フィードバックなし & 未送信
+    explore_candidates = [a for s, a in processed_list if a['url'] not in sent_ids and a['url'] not in feedback_urls and a not in liked]
+    explore = random.choice(explore_candidates) if explore_candidates else (random.choice([a for s, a in processed_list]) if processed_list else None)
+    if explore: explore['delivery_label'] = "新しい視点"
+
+    # 3. 再評価 (1件) - 過去dislike & 7日以上経過
+    retry_candidates = []
+    for s, a in processed_list:
+        if a['url'] in disliked_info:
+            if (now - disliked_info[a['url']]).days > 7:
+                retry_candidates.append(a)
+    
+    retry = random.choice(retry_candidates) if retry_candidates else (random.choice([a for s, a in processed_list if a not in liked and a != explore]) if len(processed_list) > 4 else None)
+    if retry: retry['delivery_label'] = "再チェック"
+
+    return liked + ([explore] if explore else []) + ([retry] if retry else [])
+
 
 def main():
     user_ids = get_all_user_ids()
@@ -94,23 +131,9 @@ def main():
                 a['matched_keywords'] = [k for k in a['keywords'] if k in kw_names]
                 processed.append((score_article(a, kws, user_profile), a))
             
-            processed.sort(key=lambda x: x[0], reverse=True)
-            
-            # --- 3:1:1 構成作成 ---
-            # ① 好み (上位3件)
-            liked = [a for s, a in processed if a['url'] not in sent_ids][:3]
-            for a in liked: a['delivery_label'] = "おすすめ"
+            # 3:1:1構成で選定
+            final_articles = select_311_articles(processed, sent_ids, user_profile.get("raw_logs", []))
 
-            # ② 未知 (低い重み or 未出現)
-            explore = [a for s, a in processed if a['url'] not in sent_ids and a not in liked][-1:]
-            for a in explore: a['delivery_label'] = "🆕 新しい視点"
-            
-            # ③ 再評価 (dislike履歴あり + 3日以上前)
-            retry = [] # ロジック簡略化のため空リストを初期値に、実際はarticle_logから取得
-            # TODO: 過去3日以上前のdislikeログから抽出
-            for a in retry: a['delivery_label'] = "🔁 再チェック"
-
-            final_articles = liked + explore + retry
             for a in final_articles:
                 a['category'] = category
             all_user_articles.extend(final_articles)
