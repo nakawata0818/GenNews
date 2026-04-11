@@ -2,7 +2,6 @@ import os
 import time
 import random
 import requests
-from sheet_utils import get_user_keywords, get_all_user_ids, get_sent_article_ids, save_sent_articles, save_article_log, get_sheet_by_name
 from sheet_utils import get_user_keywords, get_all_user_ids, get_sent_article_ids, save_sent_articles, save_article_log, get_sheet_by_name, save_exposure, get_exposure_score, promote_keywords, get_related_keywords
 from scoring import score_article
 from rss import fetch_rss_articles
@@ -229,7 +228,14 @@ def get_more_news(user_id):
             kw for kw in keywords_only
             if kw.lower() in title_text or kw.lower() in summary_text
         ]
-        article['summary'] = summarize_article(article['title'], article['summary'])
+        res = summarize_article(article['title'], article['summary'])
+        if "【キーワード】" in res:
+            parts = res.split("【キーワード】")
+            article['summary'] = parts[0].strip()
+            article['relevant_keywords'] = parts[1].strip()
+        else:
+            article['summary'] = res
+            article['relevant_keywords'] = ""
         time.sleep(1)
 
     if top5:

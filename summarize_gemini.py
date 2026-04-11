@@ -2,6 +2,9 @@ import time
 from google import genai
 from config import GEMINI_API_KEY
 
+# クォータ制限や存在しないモデルを一時的に記録して、今回の実行（プロセス内）で再試行しないようにする
+_DISABLED_MODELS = set()
+
 PROMPT = """
 以下の記事を日本語で要約し、関連するキーワードを抽出してください。
 
@@ -30,9 +33,12 @@ def summarize_article(title: str, summary: str) -> str:
     content = f"タイトル: {title}\n内容: {summary}"
 
     # 試行するモデルの優先順位リスト
-    models_to_try = ['gemini-3-flash-lite-preview','gemini-3-flash-pro-preview','gemini-3-flash-preview',"gemini-2.5-flash-lite", 'gemini-1.5-flash']
+    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'] # 安定版を優先し、存在しないモデルを削除
 
     for model_name in models_to_try:
+        if model_name in _DISABLED_MODELS:
+            continue
+
         for i in range(5):  # 各モデルにつき最大5回リトライ
             try:
                 response = client.models.generate_content(
@@ -42,9 +48,10 @@ def summarize_article(title: str, summary: str) -> str:
                 error_msg = str(e)
                 print(f"[summarize_gemini error] model={model_name} attempt {i+1}: {e}")
 
-                # 制限に達した(429)場合は、ループを抜けて次のモデルを試す
-                if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-                    print(f"[INFO] {model_name} の制限に達したため、次のモデルに切り替えます。")
+                # 制限に達した(429)や存在しない(404)場合は、今回の実行ではこのモデルをスキップ対象にする
+                if any(x in error_msg for x in ["429", "RESOURCE_EXHAUSTED", "404", "NOT_FOUND"]):
+                    print(f"[INFO] {model_name} が利用不可（制限または未存在）なため、以降の配信ではスキップします。")
+                    _DISABLED_MODELS.add(model_name)
                     break
                 
                 # 一時的な負荷(503)などの場合は指数バックオフでリトライ

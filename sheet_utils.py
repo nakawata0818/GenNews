@@ -146,7 +146,7 @@ def promote_keywords(user_id):
         
         for idx, kw in reversed(to_promote): # 下から削除しないと行番号がずれるため
             update_keyword_weight(user_id, kw, -0.2) # 初期weight 0.8にするため(1.0 + -0.2)
-            rel_sheet.delete_rows(idx)
+            rel_sheet.delete_row(idx)
             print(f"[PROMOTION] {kw} moved to main keywords for {user_id}")
     except Exception as e:
         print(f"[Error] promote_keywords: {e}")
@@ -158,8 +158,14 @@ def delete_user_keyword(user_id, keyword):
         records = sheet.get_all_records()
         # ユーザーIDとキーワードが一致する行を探して削除
         for idx, row in enumerate(records, start=2):
-            if str(row.get('user_id', '')).strip() == str(user_id).strip() and row.get('keyword') == keyword:
-                sheet.delete_rows(idx)
+            s_uid = str(row.get('user_id', '')).strip()
+            s_target_uid = str(user_id).strip()
+            s_kw = str(row.get('keyword', '')).strip()
+            s_target_kw = str(keyword).strip()
+
+            if s_uid == s_target_uid and s_kw == s_target_kw:
+                sheet.delete_row(idx)
+                print(f"[DEBUG] Deleted row {idx} for user {user_id}, keyword {keyword}")
                 return True
     except Exception as e:
         print(f"[Error] delete_user_keyword: {e}")
@@ -198,7 +204,12 @@ def update_keyword_weight(user_id, keyword, delta):
     sheet = get_sheet_by_name('keywords')
     records = sheet.get_all_records()
     for idx, row in enumerate(records, start=2):
-        if row.get('user_id') == user_id and row.get('keyword') == keyword:
+        s_uid = str(row.get('user_id', '')).strip()
+        s_target_uid = str(user_id).strip()
+        s_kw = str(row.get('keyword', '')).strip()
+        s_target_kw = str(keyword).strip()
+
+        if s_uid == s_target_uid and s_kw == s_target_kw:
             try:
                 weight = float(row.get('weight', 1.0))
             except Exception:
