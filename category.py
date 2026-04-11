@@ -1,6 +1,6 @@
 # category.py
 from category_suggester import suggest_category
-from sheet_utils import get_category_map, save_category_mapping
+from sheet_utils import get_category_map, save_category_mapping, save_category_mappings_batch
 
 NORMALIZE_MAP = {
     "テクノロジー": "技術",
@@ -52,7 +52,7 @@ def get_category(keyword):
 def recategorize_user_keywords(user_id):
     """ユーザーの全キーワードを再カテゴライズする"""
     from category_suggester import suggest_categories_batch
-    from sheet_utils import get_user_keywords, save_category_mapping
+    from sheet_utils import get_user_keywords
     
     user_kws = get_user_keywords(user_id)
     if not user_kws:
@@ -62,5 +62,6 @@ def recategorize_user_keywords(user_id):
     # LLMでまとめてカテゴライズ
     mapping = suggest_categories_batch(kw_names)
     
-    for kw, cat in mapping.items():
-        save_category_mapping(kw, normalize_category(cat))
+    # 正規化して一括保存
+    normalized_mapping = {kw: normalize_category(cat) for kw, cat in mapping.items()}
+    save_category_mappings_batch(normalized_mapping)

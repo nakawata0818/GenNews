@@ -11,6 +11,8 @@ SCOPE = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/au
 # 認証クライアントと認証ファイルパスのキャッシュ用変数
 _gspread_client = None
 _creds_path = None
+_spreadsheet = None
+_worksheets = {}
 
 def get_user_keywords(user_id):
     """
@@ -71,19 +73,34 @@ def get_category_map():
     except Exception:
         return {}
 
-def save_category_mapping(keyword, category):
-    """category_mapシートに新しい分類を保存"""
+def save_category_mappings_batch(mappings):
+    """
+    複数キーワードのカテゴリ分類をまとめて保存/更新（API節約版）
+    mappings: {keyword: category, ...}
+    """
     try:
         sheet = get_sheet_by_name('category_map')
         records = sheet.get_all_records()
-        # 既存のキーワードがあればカテゴリを更新
-        for idx, row in enumerate(records, start=2):
-            if row.get('keyword') == keyword:
-                sheet.update_cell(idx, 2, category)
-                return
-        sheet.append_row([keyword, category])
+        
+        # 現状のキーワードと行番号のマップを作成
+        kw_to_row = {str(row.get('keyword', '')).strip(): idx for idx, row in enumerate(records, start=2)}
+        
+        for kw, cat in mappings.items():
+            kw_clean = str(kw).strip()
+            if kw_clean in kw_to_row:
+                # 既存なら更新
+                sheet.update_cell(kw_to_row[kw_clean], 2, cat)
+            else:
+                # 新規なら追加
+                sheet.append_row([kw_clean, cat])
+                # recordsを模して追加（同じバッチ内での重複回避用）
+                kw_to_row[kw_clean] = len(kw_to_row) + 2 
     except Exception as e:
-        print(f"[sheet_utils error] save_category_mapping: {e}")
+        print(f"[sheet_utils error] save_category_mappings_batch: {e}")
+
+def save_category_mapping(keyword, category):
+    """単一の保存もバッチ用関数を再利用"""
+    save_category_mappings_batch({keyword: category})
 
 def save_article_log(user_id, article_id, keywords, category, action):
     """
