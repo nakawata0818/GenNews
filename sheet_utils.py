@@ -146,7 +146,7 @@ def promote_keywords(user_id):
         
         for idx, kw in reversed(to_promote): # 下から削除しないと行番号がずれるため
             update_keyword_weight(user_id, kw, -0.2) # 初期weight 0.8にするため(1.0 + -0.2)
-            rel_sheet.delete_row(idx)
+            rel_sheet.delete_rows(idx)
             print(f"[PROMOTION] {kw} moved to main keywords for {user_id}")
     except Exception as e:
         print(f"[Error] promote_keywords: {e}")
@@ -164,7 +164,7 @@ def delete_user_keyword(user_id, keyword):
             s_target_kw = str(keyword).strip()
 
             if s_uid == s_target_uid and s_kw == s_target_kw:
-                sheet.delete_row(idx)
+                sheet.delete_rows(idx)
                 print(f"[DEBUG] Deleted row {idx} for user {user_id}, keyword {keyword}")
                 return True
     except Exception as e:

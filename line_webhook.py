@@ -11,6 +11,7 @@ from sheet_utils import setup_google_credentials, update_keyword_weight, save_ar
 from send_news import get_more_news, send_line_flex
 from feature_extractor import extract_features
 from profile import generate_user_profile, generate_profile_summary
+from category import recategorize_user_keywords
 
 app = Flask(__name__)
 
