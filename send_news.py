@@ -101,82 +101,89 @@ def select_311_articles(processed_list, sent_ids, user_logs):
     return liked + ([explore] if explore else []) + ([retry] if retry else [])
 
 
+def deliver_news_to_user(user_id):
+    """特定のユーザーに対してニュース配信（3:1:1構成）を実行"""
+    user_keywords = get_user_keywords(user_id)
+    if not user_keywords:
+        print(f"[DEBUG] No keywords found for {user_id}")
+        return
+    
+    # 1. キーワードをカテゴリ別にグループ化
+    cat_to_kws = {}
+    for kw, w in user_keywords:
+        cat = get_category(kw)
+        if cat not in cat_to_kws: cat_to_kws[cat] = []
+        cat_to_kws[cat].append((kw, w))
+        
+    user_profile = generate_user_profile(user_id)
+    # 関連キーワード情報をプロファイルに追加
+    user_profile['related_keywords'] = get_related_keywords(user_id)
+    sent_ids = get_sent_article_ids(user_id)
+    all_user_articles = []
+    
+    # 2. カテゴリごとに記事収集・構成
+    for category, kws in cat_to_kws.items():
+        kw_names = [k for k, w in kws]
+        articles = deduplicate_articles(fetch_rss_articles(kw_names))
+        
+        # スコアリングと特徴付与
+        processed = []
+        for a in articles:
+            features = extract_features(a)
+            a.update(features)
+            # ユーザーの登録キーワードがタイトルか要約に含まれているか直接チェック
+            a['matched_keywords'] = [
+                k for k in kw_names 
+                if k.lower() in a.get('title', '').lower() or k.lower() in a.get('summary', '').lower()
+            ]
+            processed.append((score_article(a, kws, user_profile, exposure_func=get_exposure_score), a))
+        
+        # 3:1:1構成で選定
+        final_articles = select_311_articles(processed, sent_ids, user_profile.get("raw_logs", []))
+
+        for a in final_articles:
+            a['category'] = category
+        all_user_articles.extend(final_articles)
+
+    if not all_user_articles:
+        print(f"[DEBUG] No new articles found for {user_id}")
+        return
+
+    # まとめて要約
+    for a in all_user_articles:
+        res = summarize_article(a['title'], a['summary'])
+        if res and "【キーワード】" in res:
+            parts = res.split("【キーワード】")
+            a['summary'] = parts[0].strip()
+            a['relevant_keywords'] = parts[1].strip()
+        else:
+            a['summary'] = res if res else ""
+            a['relevant_keywords'] = ""
+        time.sleep(1)
+
+    # まとめて送信 (LINEカルーセルの10件制限に従って分割送信)
+    for i in range(0, len(all_user_articles), 10):
+        chunk = all_user_articles[i:i+10]
+        carousel = create_carousel(chunk)
+        send_line_flex(user_id, carousel)
+
+    # 露出の記録
+    for a in all_user_articles:
+        save_exposure(user_id, a.get('matched_keywords', []))
+
+    # 保存処理
+    current_urls = [a['url'] for a in all_user_articles]
+    save_sent_articles(user_id, current_urls)
+    for a in all_user_articles:
+        save_article_log(user_id, a['url'], a['matched_keywords'], a['category'], 'send')
+    
+    # キーワード昇格判定
+    promote_keywords(user_id)
+
 def main():
     user_ids = get_all_user_ids()
     for user_id in user_ids:
-        user_keywords = get_user_keywords(user_id)
-        if not user_keywords: continue
-        
-        # 1. キーワードをカテゴリ別にグループ化
-        cat_to_kws = {}
-        for kw, w in user_keywords:
-            cat = get_category(kw)
-            if cat not in cat_to_kws: cat_to_kws[cat] = []
-            cat_to_kws[cat].append((kw, w))
-            
-        user_profile = generate_user_profile(user_id)
-        # 関連キーワード情報をプロファイルに追加
-        user_profile['related_keywords'] = get_related_keywords(user_id)
-        sent_ids = get_sent_article_ids(user_id)
-        all_user_articles = []
-        
-        # 2. カテゴリごとに記事収集・構成
-        for category, kws in cat_to_kws.items():
-            kw_names = [k for k, w in kws]
-            articles = deduplicate_articles(fetch_rss_articles(kw_names))
-            
-            # スコアリングと特徴付与
-            processed = []
-            for a in articles:
-                features = extract_features(a)
-                a.update(features)
-                # ユーザーの登録キーワードがタイトルか要約に含まれているか直接チェック
-                a['matched_keywords'] = [
-                    k for k in kw_names 
-                    if k.lower() in a.get('title', '').lower() or k.lower() in a.get('summary', '').lower()
-                ]
-                processed.append((score_article(a, kws, user_profile, exposure_func=get_exposure_score), a))
-            
-            # 3:1:1構成で選定
-            final_articles = select_311_articles(processed, sent_ids, user_profile.get("raw_logs", []))
-
-            for a in final_articles:
-                a['category'] = category
-            all_user_articles.extend(final_articles)
-
-        if not all_user_articles:
-            continue
-
-        # まとめて要約
-        for a in all_user_articles:
-            res = summarize_article(a['title'], a['summary'])
-            if "【キーワード】" in res:
-                parts = res.split("【キーワード】")
-                a['summary'] = parts[0].strip()
-                a['relevant_keywords'] = parts[1].strip()
-            else:
-                a['summary'] = res
-                a['relevant_keywords'] = ""
-            time.sleep(1)
-
-        # まとめて送信 (LINEカルーセルの10件制限に従って分割送信)
-        for i in range(0, len(all_user_articles), 10):
-            chunk = all_user_articles[i:i+10]
-            carousel = create_carousel(chunk)
-            send_line_flex(user_id, carousel)
-
-        # 露出の記録 (Section 10)
-        for a in all_user_articles:
-            save_exposure(user_id, a.get('matched_keywords', []))
-
-        # 保存処理
-        current_urls = [a['url'] for a in all_user_articles]
-        save_sent_articles(user_id, current_urls)
-        for a in all_user_articles:
-            save_article_log(user_id, a['url'], a['matched_keywords'], a['category'], 'send')
-        
-        # キーワード昇格判定 (Section 5)
-        promote_keywords(user_id)
+        deliver_news_to_user(user_id)
 
 # 追加配信「もっと」用
 def get_more_news(user_id):

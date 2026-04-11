@@ -8,7 +8,7 @@ from oauth2client.service_account import ServiceAccountCredentials # Keep for ge
 
 from config import LINE_CHANNEL_ACCESS_TOKEN, SHEET_NAME, GOOGLE_SHEET_KEY
 from sheet_utils import setup_google_credentials, update_keyword_weight, save_article_log, get_sheet_by_name, set_user_keywords, get_user_keywords, update_related_keyword, delete_user_keyword, get_user_state, set_user_state
-from send_news import get_more_news, send_line_flex
+from send_news import get_more_news, send_line_flex, deliver_news_to_user
 from feature_extractor import extract_features
 from profile import generate_user_profile, generate_profile_summary
 from category import get_category, recategorize_user_keywords
@@ -22,6 +22,14 @@ def safe_get_more_news(user_id):
         get_more_news(user_id)
     except Exception as e:
         print(f"[THREAD ERROR] get_more_news: {e}")
+
+def safe_deliver_news(user_id):
+    """スレッド内でエラーが起きてもプロセスを落とさずログを出す"""
+    try:
+        print(f"[THREAD] deliver_news started for {user_id}")
+        deliver_news_to_user(user_id)
+    except Exception as e:
+        print(f"[THREAD ERROR] deliver_news: {e}")
 
 @app.route("/linewebhook", methods=['POST'])
 def linewebhook():
@@ -137,6 +145,12 @@ def linewebhook():
                 thread = threading.Thread(target=safe_get_more_news, args=(user_id,))
                 thread.start()
                 reply_message(event['replyToken'], '追加ニュースを配信しました')
+
+            elif user_text == 'ニュース実行':
+                # 非同期で実行
+                thread = threading.Thread(target=safe_deliver_news, args=(user_id,))
+                thread.start()
+                reply_message(event['replyToken'], 'ニュースの生成を開始しました。完了次第お届けします。')
 
             # (中略: キーワード更新などのロジックは維持)
             elif user_text.startswith('キーワード:'):

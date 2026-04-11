@@ -2,6 +2,7 @@
 import time
 from google import genai
 from config import GEMINI_API_KEY
+from summarize_gemini import generate_content_with_retry
 
 def suggest_category(keyword):
     """
@@ -16,18 +17,12 @@ def suggest_category(keyword):
     
     キーワード: {keyword}
     """
-    
-    for i in range(3):
-        try:
-            response = client.models.generate_content(
-                model='gemini-1.5-flash', contents=prompt)
-            result = response.text.strip()
-            if "→" in result:
-                result = result.split("→")[-1].strip()
-            return result
-        except Exception as e:
-            print(f"[category_suggester error] {e}")
-            time.sleep(1)
+    result = generate_content_with_retry(client, prompt)
+    if result:
+        if "→" in result:
+            result = result.split("→")[-1].strip()
+        return result
+
     return "その他"
 
 def suggest_categories_batch(keywords):
@@ -48,16 +43,13 @@ def suggest_categories_batch(keywords):
     キーワードリスト:
     {kw_list_str}
     """
-    for i in range(3):
-        try:
-            response = client.models.generate_content(
-                model='gemini-1.5-flash', contents=prompt)
-            mapping = {}
-            for line in response.text.strip().split('\n'):
-                if ":" in line:
-                    k, v = line.split(":", 1)
-                    mapping[k.strip()] = v.strip()
-            return mapping
-        except Exception:
-            time.sleep(1)
+    res_text = generate_content_with_retry(client, prompt)
+    if res_text:
+        mapping = {}
+        for line in res_text.split('\n'):
+            if ":" in line:
+                k, v = line.split(":", 1)
+                mapping[k.strip()] = v.strip()
+        return mapping
+
     return {kw: "その他" for kw in keywords}

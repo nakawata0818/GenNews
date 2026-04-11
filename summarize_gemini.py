@@ -39,12 +39,9 @@ def list_available_models():
         if 'generateContent' in model.supported_actions:
             print(f"Name: {model.name}, Display: {model.display_name}")
 
-def summarize_article(title: str, summary: str) -> str:
+def get_models_to_try(client):
+    """動的にモデルリストを取得し最新順にソートする（キャッシュ利用）"""
     global _DYNAMIC_MODELS_CACHE
-    client = genai.Client(api_key=GEMINI_API_KEY)
-    content = f"タイトル: {title}\n内容: {summary}"
-
-    # 初回呼び出し時に動的にモデルリストを取得して最新順にソート
     if not _DYNAMIC_MODELS_CACHE:
         try:
             discovered_models = []
@@ -60,8 +57,11 @@ def summarize_article(title: str, summary: str) -> str:
             print(f"[Error] Failed to fetch models dynamically: {e}")
             # APIからの取得に失敗した場合のフォールバック
             _DYNAMIC_MODELS_CACHE = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+    return _DYNAMIC_MODELS_CACHE
 
-    models_to_try = _DYNAMIC_MODELS_CACHE
+def generate_content_with_retry(client, contents):
+    """モデルローテーションとリトライを伴う生成処理"""
+    models_to_try = get_models_to_try(client)
 
     for model_name in models_to_try:
         if model_name in _DISABLED_MODELS:
@@ -70,7 +70,7 @@ def summarize_article(title: str, summary: str) -> str:
         for i in range(5):  # 各モデルにつき最大5回リトライ
             try:
                 response = client.models.generate_content(
-                    model=model_name, contents=PROMPT + "\n" + content)
+                    model=model_name, contents=contents)
                 return response.text.strip()
             except Exception as e:
                 error_msg = str(e)
@@ -82,12 +82,25 @@ def summarize_article(title: str, summary: str) -> str:
                     _DISABLED_MODELS.add(model_name)
                     break
                 
-                # 一時的な負荷(503)などの場合は指数バックオフでリトライ
+                # 一時的な負荷(503)などの場合は指数バックオフで待機
                 if "503" in error_msg or "high demand" in error_msg.lower():
                     time.sleep(2 ** i)
                     continue
                 break
-    return "要約に失敗しました。"
+    return None
+
+def summarize_article(title: str, summary: str) -> str:
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    content = f"タイトル: {title}\n内容: {summary}"
+    
+    res_text = generate_content_with_retry(client, PROMPT + "\n" + content)
+    if res_text:
+        return res_text
+
+    # すべてのモデルが失敗した場合のフォールバック
+    print(f"[WARN] All Gemini models failed for: {title}. Returning original snippet.")
+    fallback_text = f"【要約制限中】\n{summary[:200]}..."
+    return f"{fallback_text}\n\n【キーワード】\n(自動抽出停止中)"
 
 if __name__ == "__main__":
     print(summarize_article("AIが進化", "AI技術が急速に発展しています。"))
