@@ -168,18 +168,20 @@ def linewebhook():
                     if not user_kws_with_weight:
                         reply_text = "現在のキーワード: 未設定"
                     else:
-                        # カテゴリごとに分類して表示
+                        # カテゴリごとに束ねる
                         category_groups = {}
                         for kw, weight in user_kws_with_weight:
                             cat = get_category(kw)
                             if cat not in category_groups:
                                 category_groups[cat] = []
-                            category_groups[cat].append(f"{kw}({weight})")
+                            # 重みが2.0以上の重要ワードには★を付与
+                            mark = "★" if weight >= 2.0 else ""
+                            category_groups[cat].append(f"{kw}{mark}({weight:.1f})")
                         
-                        result_lines = ["【現在の登録キーワード】"]
+                        result_lines = ["📋 登録キーワード（カテゴリ別）"]
                         for cat, kws in category_groups.items():
-                            result_lines.append(f"\n■ {cat}")
-                            result_lines.append(", ".join(kws))
+                            result_lines.append(f"\n──────────\n■ {cat}")
+                            result_lines.append("・" + "\n・".join(kws))
                         reply_text = "\n".join(result_lines)
                 except Exception as e:
                     print(f"[Keyword check error] {e}")

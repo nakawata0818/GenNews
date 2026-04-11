@@ -25,16 +25,18 @@ def extract_features(article):
     category = "その他"
     if any(word in text for word in ["技術", "開発", "LLM", "AI", "テクノロジー", "テック", "ガジェット"]):
         category = "技術"
-    elif any(word in text for word in ["企業", "市場", "投資", "経済", "金融", "ビジネス", "株価", "経営", "起業"]):
+    elif any(word in text for word in ["企業", "市場", "投資", "経済", "金融", "ビジネス", "株価", "経営", "起業", "財政"]):
         category = "ビジネス"
-    elif any(word in text for word in ["健康", "医療", "医学", "ダイエット", "ウェルビーイング", "ヘルスケア", "介護"]):
+    elif any(word in text for word in ["健康", "医療", "医学", "ダイエット", "ウェルビーイング", "ヘルスケア", "介護", "認知症", "病院"]):
         category = "ヘルスケア"
-    elif any(word in text for word in ["政治", "政府", "選挙", "外交"]):
+    elif any(word in text for word in ["政治", "政府", "選挙", "外交", "政権", "国会"]):
         category = "政治"
-    elif any(word in text for word in ["社会", "環境", "災害", "教育"]):
+    elif any(word in text for word in ["社会", "環境", "災害", "教育", "地域", "横浜", "事件", "事故"]):
         category = "社会"
-    elif any(word in text for word in ["エンタメ", "映画", "音楽", "芸能", "スポーツ"]):
+    elif any(word in text for word in ["エンタメ", "映画", "音楽", "芸能"]):
         category = "エンタメ"
+    elif any(word in text for word in ["スポーツ", "野球", "サッカー", "プロ野球", "ベイスターズ", "DeNA", "五輪"]):
+        category = "スポーツ"
     
     return {
         "keywords": list(set(extracted_keywords)), # 重複排除
