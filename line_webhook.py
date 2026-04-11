@@ -165,11 +165,23 @@ def linewebhook():
                 try:
                     # keywordsシートから取得
                     user_kws_with_weight = get_user_keywords(user_id)
-                    kws = ", ".join([f"{kw}({weight})" for kw, weight in user_kws_with_weight])
+                    if not user_kws_with_weight:
+                        reply_text = "現在のキーワード: 未設定"
+                    else:
+                        cat_groups = {}
+                        for kw, weight in user_kws_with_weight:
+                            cat = get_category(kw)
+                            if cat not in cat_groups: cat_groups[cat] = []
+                            cat_groups[cat].append(f"{kw}({weight})")
+                        
+                        lines = ["【現在のキーワード】"]
+                        for cat, items in cat_groups.items():
+                            lines.append(f"\n■ {cat}")
+                            lines.append(", ".join(items))
+                        reply_text = "\n".join(lines)
                 except Exception as e:
-                    print(f"[Sheet find error] {e}")
-                    kws = ''
-                reply_text = f"現在のキーワード: {kws if kws else '未設定'}"
+                    print(f"[Keyword check error] {e}")
+                    reply_text = "キーワードの取得中にエラーが発生しました。"
                 reply_message(event['replyToken'], reply_text)
             
             elif user_text == '傾向':
