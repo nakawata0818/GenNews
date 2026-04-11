@@ -25,10 +25,10 @@ def extract_features(article):
     category = "その他"
     if any(word in text for word in ["技術", "開発", "LLM", "AI", "テクノロジー", "テック", "ガジェット"]):
         category = "技術"
-    elif any(word in text for word in ["企業", "市場", "投資", "経済", "金融", "ビジネス", "株価"]):
+    elif any(word in text for word in ["企業", "市場", "投資", "経済", "金融", "ビジネス", "株価", "経営", "起業"]):
         category = "ビジネス"
-    elif any(word in text for word in ["健康", "医療", "医学", "ダイエット", "ウェルビーイング"]):
-        category = "健康"
+    elif any(word in text for word in ["健康", "医療", "医学", "ダイエット", "ウェルビーイング", "ヘルスケア", "介護"]):
+        category = "ヘルスケア"
     elif any(word in text for word in ["政治", "政府", "選挙", "外交"]):
         category = "政治"
     elif any(word in text for word in ["社会", "環境", "災害", "教育"]):
