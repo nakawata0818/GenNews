@@ -7,7 +7,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials # Keep for get_sheet()
 
 from config import LINE_CHANNEL_ACCESS_TOKEN, SHEET_NAME, GOOGLE_SHEET_KEY
-from sheet_utils import setup_google_credentials, update_keyword_weight, save_article_log, get_sheet_by_name, set_user_keywords, get_user_keywords, update_related_keyword, delete_user_keyword
+from sheet_utils import setup_google_credentials, update_keyword_weight, save_article_log, get_sheet_by_name, set_user_keywords, get_user_keywords, update_related_keyword, delete_user_keyword, get_user_state, set_user_state
 from send_news import get_more_news, send_line_flex
 from feature_extractor import extract_features
 from profile import generate_user_profile, generate_profile_summary
@@ -93,6 +93,44 @@ def linewebhook():
             user_id = event['source']['userId']
             print(f"[DEBUG] user_text: {user_text}, user_id: {user_id}")
 
+            # 現在の対話状態を取得
+            state = get_user_state(user_id)
+
+            # 状態に応じた処理（キーワード追加/削除の対話中）
+            if state == 'WAITING_FOR_ADD_KEYWORD':
+                if user_text == "キャンセル":
+                    set_user_state(user_id, 'IDLE')
+                    reply_message(event['replyToken'], "追加をキャンセルしました。")
+                else:
+                    kw = user_text
+                    update_keyword_weight(user_id, kw, 0.0)
+                    recategorize_user_keywords(user_id)
+                    set_user_state(user_id, 'IDLE')
+                    reply_message(event['replyToken'], f"キーワード「{kw}」を追加し、カテゴリを再構成しました。")
+                continue
+
+            elif state == 'WAITING_FOR_DELETE_NUMBER':
+                if user_text == "キャンセル":
+                    set_user_state(user_id, 'IDLE')
+                    reply_message(event['replyToken'], "削除をキャンセルしました。")
+                else:
+                    try:
+                        num = int(user_text)
+                        user_kws = get_user_keywords(user_id)
+                        if 1 <= num <= len(user_kws):
+                            kw_to_del = user_kws[num-1][0]
+                            if delete_user_keyword(user_id, kw_to_del):
+                                recategorize_user_keywords(user_id)
+                                set_user_state(user_id, 'IDLE')
+                                reply_message(event['replyToken'], f"キーワード「{kw_to_del}」を削除し、カテゴリを再構成しました。")
+                            else:
+                                reply_message(event['replyToken'], "削除に失敗しました。番号を確認してください。")
+                        else:
+                            reply_message(event['replyToken'], f"1〜{len(user_kws)}の番号を入力してください。")
+                    except ValueError:
+                        reply_message(event['replyToken'], "有効な数字を入力するか「キャンセル」と送ってください。")
+                continue
+
             if user_text == 'もっと':
                 # 非同期で実行
                 thread = threading.Thread(target=safe_get_more_news, args=(user_id,))
@@ -109,25 +147,18 @@ def linewebhook():
                 reply_text = f"キーワードを更新しました:\n{keywords_str}"
                 reply_message(event['replyToken'], reply_text)
 
-            elif user_text.startswith('キーワード追加:'):
-                kw = user_text.replace('キーワード追加:', '').strip()
-                if kw:
-                    update_keyword_weight(user_id, kw, 0.0)
-                    recategorize_user_keywords(user_id)
-                    reply_message(event['replyToken'], f"キーワード「{kw}」を追加し、全体のカテゴリを再構成しました。")
-                else:
-                    reply_message(event['replyToken'], "追加するキーワードを指定してください。例「キーワード追加:AI」")
+            elif user_text == 'キーワード追加':
+                set_user_state(user_id, 'WAITING_FOR_ADD_KEYWORD')
+                reply_message(event['replyToken'], "追加したいキーワードを1つ送信してください。\n（中止する場合は「キャンセル」）")
 
-            elif user_text.startswith('キーワード削除:'):
-                kw = user_text.replace('キーワード削除:', '').strip()
-                if kw:
-                    if delete_user_keyword(user_id, kw):
-                        recategorize_user_keywords(user_id)
-                        reply_message(event['replyToken'], f"キーワード「{kw}」を削除し、全体のカテゴリを再構成しました。")
-                    else:
-                        reply_message(event['replyToken'], f"キーワード「{kw}」が見つかりませんでした。")
+            elif user_text == 'キーワード削除':
+                user_kws = get_user_keywords(user_id)
+                if not user_kws:
+                    reply_message(event['replyToken'], "登録されているキーワードがありません。")
                 else:
-                    reply_message(event['replyToken'], "削除するキーワードを指定してください。例「キーワード削除:AI」")
+                    set_user_state(user_id, 'WAITING_FOR_DELETE_NUMBER')
+                    list_str = "\n".join([f"{i+1}. {kw}" for i, (kw, w) in enumerate(user_kws)])
+                    reply_message(event['replyToken'], f"削除するキーワードの番号を入力してください：\n\n{list_str}\n\n（中止する場合は「キャンセル」）")
 
             elif user_text.startswith('キーワード確認'):
                 try:

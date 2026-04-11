@@ -171,6 +171,35 @@ def delete_user_keyword(user_id, keyword):
         print(f"[Error] delete_user_keyword: {e}")
     return False
 
+def get_user_state(user_id):
+    """ユーザーの現在の対話状態を取得"""
+    try:
+        sheet = get_sheet_by_name('user_state')
+        records = sheet.get_all_records()
+        for r in records:
+            if str(r.get('user_id', '')).strip() == str(user_id).strip():
+                return r.get('state', 'IDLE')
+    except Exception:
+        pass
+    return 'IDLE'
+
+def set_user_state(user_id, state):
+    """ユーザーの対話状態を保存"""
+    try:
+        sheet = get_sheet_by_name('user_state')
+        records = sheet.get_all_records()
+        found = False
+        for idx, row in enumerate(records, start=2):
+            if str(row.get('user_id', '')).strip() == str(user_id).strip():
+                sheet.update_cell(idx, 2, state)
+                sheet.update_cell(idx, 3, datetime.now(timezone.utc).isoformat())
+                found = True
+                break
+        if not found:
+            sheet.append_row([user_id, state, datetime.now(timezone.utc).isoformat()])
+    except Exception as e:
+        print(f"[Error] set_user_state: {e}")
+
 def save_exposure(user_id, keywords):
     """露出を記録"""
     try:
