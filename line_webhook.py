@@ -11,7 +11,7 @@ from sheet_utils import setup_google_credentials, update_keyword_weight, save_ar
 from send_news import get_more_news, send_line_flex
 from feature_extractor import extract_features
 from profile import generate_user_profile, generate_profile_summary
-from category import recategorize_user_keywords
+from category import get_category, recategorize_user_keywords
 
 app = Flask(__name__)
 
@@ -168,17 +168,19 @@ def linewebhook():
                     if not user_kws_with_weight:
                         reply_text = "現在のキーワード: 未設定"
                     else:
-                        cat_groups = {}
+                        # カテゴリごとに分類して表示
+                        category_groups = {}
                         for kw, weight in user_kws_with_weight:
                             cat = get_category(kw)
-                            if cat not in cat_groups: cat_groups[cat] = []
-                            cat_groups[cat].append(f"{kw}({weight})")
+                            if cat not in category_groups:
+                                category_groups[cat] = []
+                            category_groups[cat].append(f"{kw}({weight})")
                         
-                        lines = ["【現在のキーワード】"]
-                        for cat, items in cat_groups.items():
-                            lines.append(f"\n■ {cat}")
-                            lines.append(", ".join(items))
-                        reply_text = "\n".join(lines)
+                        result_lines = ["【現在の登録キーワード】"]
+                        for cat, kws in category_groups.items():
+                            result_lines.append(f"\n■ {cat}")
+                            result_lines.append(", ".join(kws))
+                        reply_text = "\n".join(result_lines)
                 except Exception as e:
                     print(f"[Keyword check error] {e}")
                     reply_text = "キーワードの取得中にエラーが発生しました。"
