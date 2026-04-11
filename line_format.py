@@ -6,11 +6,12 @@ def create_news_bubble(article):
     summary = article.get('summary', 'No Summary')
     delivery_label = article.get('delivery_label', '')
     category = article.get('category', 'その他')
+    relevant_keywords = article.get('relevant_keywords', '')
 
     # HTMLタグの簡易除去
     summary = summary.replace('<b>', '').replace('</b>', '').replace('<br>', '\n')
-    if len(summary) > 100:
-        summary = summary[:100] + "..."
+    if len(summary) > 400:
+        summary = summary[:400] + "..."
     
     # 表示ラベルの構築 【カテゴリ｜ラベル】
     label_part = f"｜{delivery_label}" if delivery_label else ""
@@ -23,6 +24,7 @@ def create_news_bubble(article):
     # 記事に関連したキーワードを抽出（postbackデータ用）
     # 300文字制限対策としてキーワード文字列を50文字でカット
     matched_kws = ",".join(article.get('matched_keywords', []))[:50]
+    rel_kws = article.get('relevant_keywords', '')[:50]
     
     # article_idとcategoryはログ保存のために必要
     article_id = article.get('url') # URLをIDとして利用
@@ -32,15 +34,36 @@ def create_news_bubble(article):
     # 150文字では超過する可能性があるため、より安全な100文字に制限
     short_id = article_id[:100] if article_id else ""
 
+
+    body_contents = [
+        {"type": "text", "text": title, "weight": "bold", "size": "md", "wrap": True}
+    ]
+
+    if relevant_keywords:
+        body_contents.append({
+            "type": "text",
+            "text": f"関連キーワード：{relevant_keywords}",
+            "size": "xs",
+            "color": "#1DB446",
+            "wrap": True,
+            "margin": "sm"
+        })
+
+    body_contents.append({
+        "type": "text",
+        "text": summary,
+        "size": "sm",
+        "color": "#666666",
+        "wrap": True,
+        "margin": "md"
+    })
+
     return {
       "type": "bubble",
       "body": {
         "type": "box",
         "layout": "vertical",
-        "contents": [
-          {"type": "text", "text": title, "weight": "bold", "size": "md", "wrap": True},
-          {"type": "text", "text": summary, "size": "sm", "color": "#666666", "wrap": True, "margin": "md"}
-        ]
+        "contents": body_contents
       },
       "footer": {
         "type": "box",
@@ -63,13 +86,13 @@ def create_news_bubble(article):
                 "type": "button",
                 "style": "secondary",
                 "height": "sm",
-                "action": {"type": "postback", "label": "👍 いいね", "data": f"action=like&article_id={short_id}&kws={matched_kws}&category={category}"}
+                "action": {"type": "postback", "label": "👍 いいね", "data": f"action=like&article_id={short_id}&kws={matched_kws}&rel_kws={rel_kws}&category={category}"}
               },
               {
                 "type": "button",
                 "style": "secondary",
                 "height": "sm",
-                "action": {"type": "postback", "label": "👎 興味なし", "data": f"action=dislike&article_id={short_id}&kws={matched_kws}&category={category}"}
+                "action": {"type": "postback", "label": "👎 興味なし", "data": f"action=dislike&article_id={short_id}&kws={matched_kws}&rel_kws={rel_kws}&category={category}"}
               }
             ]
           },

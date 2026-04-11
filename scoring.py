@@ -13,20 +13,22 @@ SOURCE_SCORES = {
     "その他": 0.7
 }
 
-def score_article(article: Dict, user_keywords: List[Tuple[str, float]], user_profile: Dict = None) -> float:
+def score_article(article: Dict, user_keywords: List[Tuple[str, float]], user_profile: Dict = None, exposure_func=None) -> float:
     """
-    指示書の計算式: score = (keyword_score * 0.4 + category_score * 0.3 + freshness_score * 0.2 + source_score * 0.1)
+    指示書の計算式: score = (keyword_score * 0.4 + category_score * 0.3 + freshness_score * 0.2 + source_score * 0.1) - exposure_penalty + related_bonus
     article: {'title', 'summary', 'url', 'published', ...}
     user_keywords: [(keyword, weight), ...]
     """
     title = article.get('title', '')
     summary = article.get('summary', '')
-    
+
     # 1. keyword_score
     kw_score = 0.0
+    matched_keywords = []
     for keyword, weight in user_keywords:
         if keyword and (keyword in title or keyword in summary):
             kw_score += weight
+            matched_keywords.append(keyword)
 
     # 2. freshness_score
     # RSSのpublished文字列を解析（簡易実装）
@@ -62,6 +64,35 @@ def score_article(article: Dict, user_keywords: List[Tuple[str, float]], user_pr
         category_score = min(1.0, category_score / 10.0)
 
     final_score = (kw_score * 0.4) + (category_score * 0.3) + (freshness * 0.2) + (source_val * 0.1)
+
+    # 5. フィードバック反映 & 露出制御 & 関連キーワード
+    if user_profile:
+        user_id = user_profile.get("user_id")
+        
+        # 露出ペナルティ (Section 7)
+        if exposure_func and user_id:
+            for kw in matched_keywords:
+                e_score = exposure_func(user_id, kw)
+                final_score -= (e_score * 0.2)
+
+        # フィードバック反映 & Negative管理 (Section 3, 8)
+        liked_kws = user_profile.get("liked_keywords", set())
+        disliked_kws = user_profile.get("disliked_keywords", set())
+        negative_scores = user_profile.get("negative_scores", {})
+
+        for kw in matched_keywords:
+            if kw in liked_kws: final_score += 0.5
+            if kw in disliked_kws: final_score -= 0.7
+            penalty = negative_scores.get(kw, 0.0)
+            final_score -= (penalty * 0.3)
+            
+        # 関連キーワード加点 (Section 8)
+        rel_kws = user_profile.get("related_keywords", [])
+        for rk in rel_kws:
+            rk_word = rk.get('keyword')
+            if rk_word and (rk_word in title or rk_word in summary):
+                final_score += float(rk.get('score', 0)) * 0.5
+
     return final_score
 
 def score_news(article, user_keywords):

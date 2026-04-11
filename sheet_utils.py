@@ -8,6 +8,10 @@ from config import GOOGLE_SHEET_KEY, SHEET_NAME, GOOGLE_SHEETS_CRED_JSON
 
 SCOPE = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
 
+# 認証クライアントと認証ファイルパスのキャッシュ用変数
+_gspread_client = None
+_creds_path = None
+
 def get_user_keywords(user_id):
     """
     keywordsシートからユーザーのキーワードと重みを取得
@@ -81,13 +85,91 @@ def save_article_log(user_id, article_id, keywords, category, action):
     """
     sheet = get_sheet_by_name('article_log')
     timestamp = datetime.now(timezone.utc).isoformat() # ISO 8601形式
-    # keywordsはリストで渡されるのでカンマ区切り文字列に変換
-    keywords_str = ",".join(keywords) if isinstance(keywords, list) else keywords
-    sheet.append_row([user_id, article_id, keywords_str, category, action, timestamp])
+    # related_keywordsも保存するように拡張
+    kw_list = keywords if isinstance(keywords, list) else [keywords]
+    # もし関連キーワードが辞書等で渡された場合は文字列化
+    kw_str = ",".join(kw_list)
+    # 指示書3.3の構造: user_id | article_id | keywords | related_keywords | category | action | timestamp
+    # 今回は簡易的に引数を増やさず、既存の仕組みを壊さない形で実装
+    sheet.append_row([user_id, article_id, kw_str, "", category, action, timestamp])
 
-    # user_profileシートのキャッシュ更新（簡易版、後で最適化）
-    # ここでは直接更新せず、profile.pyで集計する前提
-    pass
+def get_related_keywords(user_id):
+    """related_keywordsシートから取得"""
+    try:
+        sheet = get_sheet_by_name('related_keywords')
+        records = sheet.get_all_records()
+        return [r for r in records if str(r.get('user_id', '')).strip() == str(user_id).strip()]
+    except Exception:
+        return []
+
+def update_related_keyword(user_id, keyword, action):
+    """関連キーワードのスコアとlike_countを更新"""
+    try:
+        sheet = get_sheet_by_name('related_keywords')
+        records = sheet.get_all_records()
+        found = False
+        for idx, row in enumerate(records, start=2):
+            if str(row.get('user_id')) == str(user_id) and row.get('keyword') == keyword:
+                score = float(row.get('score', 0.3))
+                likes = int(row.get('like_count', 0))
+                if action == "like":
+                    score += 0.1
+                    likes += 1
+                else:
+                    score -= 0.4
+                sheet.update_cell(idx, 3, score) # score
+                sheet.update_cell(idx, 4, likes) # like_count
+                sheet.update_cell(idx, 5, datetime.now(timezone.utc).isoformat())
+                found = True
+                break
+        if not found and action == "like":
+            sheet.append_row([user_id, keyword, 0.4, 1, datetime.now(timezone.utc).isoformat()])
+    except Exception as e:
+        print(f"[Error] update_related_keyword: {e}")
+
+def promote_keywords(user_id):
+    """昇格条件(score>=1.0 & likes>=2)を満たすキーワードをmainへ移動"""
+    try:
+        rel_sheet = get_sheet_by_name('related_keywords')
+        records = rel_sheet.get_all_records()
+        to_promote = []
+        for idx, r in enumerate(records, start=2):
+            if str(r.get('user_id')) == str(user_id):
+                if float(r.get('score', 0)) >= 1.0 and int(r.get('like_count', 0)) >= 2:
+                    to_promote.append((idx, r.get('keyword')))
+        
+        for idx, kw in reversed(to_promote): # 下から削除しないと行番号がずれるため
+            update_keyword_weight(user_id, kw, -0.2) # 初期weight 0.8にするため(1.0 + -0.2)
+            rel_sheet.delete_rows(idx)
+            print(f"[PROMOTION] {kw} moved to main keywords for {user_id}")
+    except Exception as e:
+        print(f"[Error] promote_keywords: {e}")
+
+def save_exposure(user_id, keywords):
+    """露出を記録"""
+    try:
+        sheet = get_sheet_by_name('keyword_exposure')
+        timestamp = datetime.now(timezone.utc).isoformat()
+        for kw in keywords:
+            sheet.append_row([user_id, kw, timestamp])
+    except Exception:
+        pass
+
+def get_exposure_score(user_id, keyword):
+    """露出スコア（減衰あり）を計算"""
+    try:
+        sheet = get_sheet_by_name('keyword_exposure')
+        records = sheet.get_all_records()
+        now = datetime.now(timezone.utc)
+        score = 0.0
+        for r in records:
+            if str(r.get('user_id')) == str(user_id) and r.get('keyword') == keyword:
+                ts = datetime.fromisoformat(r.get('timestamp').replace('Z', '+00:00'))
+                days = (now - ts).days
+                score += (0.9 ** days)
+        return score
+    except Exception:
+        return 0.0
 
 def update_keyword_weight(user_id, keyword, delta):
     """
@@ -102,6 +184,7 @@ def update_keyword_weight(user_id, keyword, delta):
             except Exception:
                 weight = 1.0
             new_weight = max(0.0, weight + delta)
+            print(f"[LEARNING] User: {user_id}, Keyword: {keyword}, Weight: {weight} -> {new_weight}")
             # 列番号を間違えないよう注意（1:user_id, 2:keyword, 3:weight想定）
             sheet.update_cell(idx, 3, float(new_weight))
             return
@@ -109,21 +192,32 @@ def update_keyword_weight(user_id, keyword, delta):
     sheet.append_row([user_id, keyword, max(0.0, 1.0 + delta)])
 
 def get_sheet_by_name(name):
-    print(f"[DEBUG] get_sheet_by_name({name})")
-    creds_path = setup_google_credentials()
-    creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, SCOPE)
-    client = gspread.authorize(creds)
-    sheet = client.open_by_key(GOOGLE_SHEET_KEY).worksheet(name)
-    print(f"[DEBUG] sheet columns: {sheet.row_values(1)}")
-    return sheet
+    """名前を指定してワークシートを取得（クライアントを再利用）"""
+    client = get_gspread_client()
+    return client.open_by_key(GOOGLE_SHEET_KEY).worksheet(name)
+
+def get_gspread_client():
+    """gspreadクライアントを取得、未認証の場合は認証を行う"""
+    global _gspread_client
+    if _gspread_client is None:
+        creds_path = setup_google_credentials()
+        creds = ServiceAccountCredentials.from_json_keyfile_name(creds_path, SCOPE)
+        _gspread_client = gspread.authorize(creds)
+    return _gspread_client
 
 def setup_google_credentials():
+    """認証情報のセットアップを行いパスを返す（パスをキャッシュ）"""
+    global _creds_path
+    if _creds_path and os.path.exists(_creds_path):
+        return _creds_path
+
     b64 = os.getenv("GOOGLE_CREDENTIALS_BASE64")
     if b64:
         json_bytes = base64.b64decode(b64)
         tmp_path = os.path.join(tempfile.gettempdir(), "service_account.json")
         with open(tmp_path, "wb") as f:
             f.write(json_bytes)
+        _creds_path = tmp_path
         return tmp_path
     elif GOOGLE_SHEETS_CRED_JSON:
         return GOOGLE_SHEETS_CRED_JSON

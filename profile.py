@@ -10,30 +10,53 @@ def generate_user_profile(user_id):
     article_log_sheet = get_sheet_by_name('article_log')
     records = article_log_sheet.get_all_records()
 
-    # 直近7日間のログをフィルタリング
-    seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
-    recent_logs = [
-        r for r in records
-        if r.get('user_id') == user_id and
-           datetime.fromisoformat(r.get('timestamp').replace('Z', '+00:00')) >= seven_days_ago
-    ]
+    now = datetime.now(timezone.utc)
+    seven_days_ago = now - timedelta(days=7)
+    
+    recent_logs = []
+    for r in records:
+        try:
+            if str(r.get('user_id', '')).strip() == str(user_id).strip() and r.get('timestamp'):
+                ts = datetime.fromisoformat(r.get('timestamp').replace('Z', '+00:00'))
+                r['_dt'] = ts # 計算用に保持
+                if ts >= seven_days_ago:
+                    recent_logs.append(r)
+        except Exception:
+            continue
 
     keyword_counts = {}
     category_counts = {}
+    liked_keywords = set()
+    disliked_keywords = set()
+    negative_scores = {} # keyword -> score (with decay)
 
     for log in recent_logs:
-        # keywordはカンマ区切りで保存されている可能性があるので分割
         keywords_in_log = [kw.strip() for kw in log.get('keyword', '').split(',') if kw.strip()]
+        action = log.get('action')
+        
         for kw in keywords_in_log:
             keyword_counts[kw] = keyword_counts.get(kw, 0) + 1
+            if action == "like":
+                liked_keywords.add(kw)
+            elif action == "dislike":
+                disliked_keywords.add(kw)
+                # ネガティブスコア計算 (0.9^経過日数 で減衰)
+                days_passed = (now - log['_dt']).days
+                decayed_val = 1.0 * (0.9 ** days_passed)
+                negative_scores[kw] = negative_scores.get(kw, 0.0) + decayed_val
         
         category = log.get('category')
         if category:
             category_counts[category] = category_counts.get(category, 0) + 1
     
     return {
+        "user_id": user_id,
         "keywords": keyword_counts,
-        "categories": category_counts
+        "categories": category_counts,
+        "liked_keywords": liked_keywords,
+        "disliked_keywords": disliked_keywords,
+        "negative_scores": negative_scores,
+        "raw_logs": [r for r in records if str(r.get('user_id', '')).strip() == str(user_id).strip()]
     }
 
 def generate_profile_summary(profile):

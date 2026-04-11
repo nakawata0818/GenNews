@@ -7,7 +7,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials # Keep for get_sheet()
 
 from config import LINE_CHANNEL_ACCESS_TOKEN, SHEET_NAME, GOOGLE_SHEET_KEY
-from sheet_utils import setup_google_credentials, update_keyword_weight, save_article_log, get_sheet_by_name, set_user_keywords, get_user_keywords
+from sheet_utils import setup_google_credentials, update_keyword_weight, save_article_log, get_sheet_by_name, set_user_keywords, get_user_keywords, update_related_keyword
 from send_news import get_more_news, send_line_flex
 from feature_extractor import extract_features
 from profile import generate_user_profile, generate_profile_summary
@@ -41,24 +41,32 @@ def linewebhook():
             action = params.get('action')
             target_kws_str = params.get('kws', '')
             target_kws = [kw.strip() for kw in target_kws_str.split(',') if kw.strip()]
+            rel_kws_str = params.get('rel_kws', '')
+            rel_kws = [kw.strip() for kw in rel_kws_str.split(',') if kw.strip()]
             article_id = params.get('article_id') # article_idも取得するように変更
             category = params.get('category', 'その他') # categoryも取得
 
             if action == "like":
                 for kw in target_kws:
                     if kw: update_keyword_weight(user_id, kw, 0.2)
+                for rkw in rel_kws:
+                    if rkw: update_related_keyword(user_id, rkw, "like")
                 # 記事ログ保存
                 if article_id:
                     save_article_log(user_id, article_id, target_kws, category, action)
-                reply_message(event['replyToken'], f"「{target_kws_str}」の関心度を上げました👍")
+                msg = f"「{target_kws_str}」の関心度を上げました👍" if target_kws_str else "この記事への関心度を上げました👍"
+                reply_message(event['replyToken'], msg)
             
             elif action == "dislike":
                 for kw in target_kws:
                     if kw: update_keyword_weight(user_id, kw, -0.3)
+                for rkw in rel_kws:
+                    if rkw: update_related_keyword(user_id, rkw, "dislike")
                 # 記事ログ保存
                 if article_id:
                     save_article_log(user_id, article_id, target_kws, category, action)
-                reply_message(event['replyToken'], f"「{target_kws_str}」の関心度を下げました👎")
+                msg = f"「{target_kws_str}」の関心度を下げました👎" if target_kws_str else "この記事への関心度を下げました👎"
+                reply_message(event['replyToken'], msg)
                 
             elif action == "more":
                 # タイムアウト回避のためスレッドで実行

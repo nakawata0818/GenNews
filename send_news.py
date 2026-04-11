@@ -3,6 +3,7 @@ import time
 import random
 import requests
 from sheet_utils import get_user_keywords, get_all_user_ids, get_sent_article_ids, save_sent_articles, save_article_log, get_sheet_by_name
+from sheet_utils import get_user_keywords, get_all_user_ids, get_sent_article_ids, save_sent_articles, save_article_log, get_sheet_by_name, save_exposure, get_exposure_score, promote_keywords, get_related_keywords
 from scoring import score_article
 from rss import fetch_rss_articles
 from dedup import deduplicate_articles
@@ -115,6 +116,8 @@ def main():
             cat_to_kws[cat].append((kw, w))
             
         user_profile = generate_user_profile(user_id)
+        # 関連キーワード情報をプロファイルに追加
+        user_profile['related_keywords'] = get_related_keywords(user_id)
         sent_ids = get_sent_article_ids(user_id)
         all_user_articles = []
         
@@ -128,8 +131,12 @@ def main():
             for a in articles:
                 features = extract_features(a)
                 a.update(features)
-                a['matched_keywords'] = [k for k in a['keywords'] if k in kw_names]
-                processed.append((score_article(a, kws, user_profile), a))
+                # ユーザーの登録キーワードがタイトルか要約に含まれているか直接チェック
+                a['matched_keywords'] = [
+                    k for k in kw_names 
+                    if k.lower() in a.get('title', '').lower() or k.lower() in a.get('summary', '').lower()
+                ]
+                processed.append((score_article(a, kws, user_profile, exposure_func=get_exposure_score), a))
             
             # 3:1:1構成で選定
             final_articles = select_311_articles(processed, sent_ids, user_profile.get("raw_logs", []))
@@ -143,7 +150,14 @@ def main():
 
         # まとめて要約
         for a in all_user_articles:
-            a['summary'] = summarize_article(a['title'], a['summary'])
+            res = summarize_article(a['title'], a['summary'])
+            if "【キーワード】" in res:
+                parts = res.split("【キーワード】")
+                a['summary'] = parts[0].strip()
+                a['relevant_keywords'] = parts[1].strip()
+            else:
+                a['summary'] = res
+                a['relevant_keywords'] = ""
             time.sleep(1)
 
         # まとめて送信 (LINEカルーセルの10件制限に従って分割送信)
@@ -152,11 +166,18 @@ def main():
             carousel = create_carousel(chunk)
             send_line_flex(user_id, carousel)
 
+        # 露出の記録 (Section 10)
+        for a in all_user_articles:
+            save_exposure(user_id, a.get('matched_keywords', []))
+
         # 保存処理
         current_urls = [a['url'] for a in all_user_articles]
         save_sent_articles(user_id, current_urls)
         for a in all_user_articles:
             save_article_log(user_id, a['url'], a['matched_keywords'], a['category'], 'send')
+        
+        # キーワード昇格判定 (Section 5)
+        promote_keywords(user_id)
 
 # 追加配信「もっと」用
 def get_more_news(user_id):
@@ -202,9 +223,11 @@ def get_more_news(user_id):
     
     for article in top5:
         # 記事に関連するキーワードを記録
+        title_text = article.get('title', '').lower()
+        summary_text = article.get('summary', '').lower()
         article['matched_keywords'] = [
-            kw for kw in article['extracted_keywords']
-            if any(ukw == kw for ukw, _ in user_keywords)
+            kw for kw in keywords_only
+            if kw.lower() in title_text or kw.lower() in summary_text
         ]
         article['summary'] = summarize_article(article['title'], article['summary'])
         time.sleep(1)
