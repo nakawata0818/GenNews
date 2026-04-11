@@ -227,15 +227,21 @@ def save_exposure(user_id, keywords):
     except Exception:
         pass
 
-def get_exposure_score(user_id, keyword):
-    """露出スコア（減衰あり）を計算"""
+def get_all_exposure_logs(user_id):
+    """ユーザーの全露出ログを一度に取得"""
     try:
         sheet = get_sheet_by_name('keyword_exposure')
-        records = sheet.get_all_records()
+        return [r for r in sheet.get_all_records() if str(r.get('user_id')) == str(user_id)]
+    except Exception:
+        return []
+
+def calculate_exposure_score_from_logs(logs, keyword):
+    """取得済みのログから特定のキーワードの露出スコアを計算"""
+    try:
         now = datetime.now(timezone.utc)
         score = 0.0
-        for r in records:
-            if str(r.get('user_id')) == str(user_id) and r.get('keyword') == keyword:
+        for r in logs:
+            if r.get('keyword') == keyword:
                 ts = datetime.fromisoformat(r.get('timestamp').replace('Z', '+00:00'))
                 days = (now - ts).days
                 score += (0.9 ** days)

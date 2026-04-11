@@ -2,7 +2,7 @@ import os
 import time
 import random
 import requests
-from sheet_utils import get_user_keywords, get_all_user_ids, get_sent_article_ids, save_sent_articles, save_article_log, get_sheet_by_name, save_exposure, get_exposure_score, promote_keywords, get_related_keywords
+from sheet_utils import get_user_keywords, get_all_user_ids, get_sent_article_ids, save_sent_articles, save_article_log, get_sheet_by_name, save_exposure, calculate_exposure_score_from_logs, get_all_exposure_logs, promote_keywords, get_related_keywords
 from scoring import score_article
 from rss import fetch_rss_articles
 from dedup import deduplicate_articles
@@ -103,6 +103,7 @@ def select_311_articles(processed_list, sent_ids, user_logs):
 
 def deliver_news_to_user(user_id):
     """特定のユーザーに対してニュース配信（3:1:1構成）を実行"""
+    print(f"[DEBUG] Starting deliver_news_to_user for {user_id}")
     user_keywords = get_user_keywords(user_id)
     if not user_keywords:
         print(f"[DEBUG] No keywords found for {user_id}")
@@ -115,14 +116,17 @@ def deliver_news_to_user(user_id):
         if cat not in cat_to_kws: cat_to_kws[cat] = []
         cat_to_kws[cat].append((kw, w))
         
+    print(f"[DEBUG] Categories identified: {list(cat_to_kws.keys())}")
     user_profile = generate_user_profile(user_id)
     # 関連キーワード情報をプロファイルに追加
     user_profile['related_keywords'] = get_related_keywords(user_id)
     sent_ids = get_sent_article_ids(user_id)
+    exposure_logs = get_all_exposure_logs(user_id) # ここで一度だけ取得
     all_user_articles = []
     
     # 2. カテゴリごとに記事収集・構成
     for category, kws in cat_to_kws.items():
+        print(f"[DEBUG] Fetching RSS for category: {category}")
         kw_names = [k for k, w in kws]
         articles = deduplicate_articles(fetch_rss_articles(kw_names))
         
@@ -136,7 +140,9 @@ def deliver_news_to_user(user_id):
                 k for k in kw_names 
                 if k.lower() in a.get('title', '').lower() or k.lower() in a.get('summary', '').lower()
             ]
-            processed.append((score_article(a, kws, user_profile, exposure_func=get_exposure_score), a))
+            # 高速化されたスコア計算（ログを渡す）
+            score = score_article(a, kws, user_profile, exposure_func=lambda uid, kw: calculate_exposure_score_from_logs(exposure_logs, kw))
+            processed.append((score, a))
         
         # 3:1:1構成で選定
         final_articles = select_311_articles(processed, sent_ids, user_profile.get("raw_logs", []))
@@ -150,6 +156,7 @@ def deliver_news_to_user(user_id):
         return
 
     # まとめて要約
+    print(f"[DEBUG] Summarizing {len(all_user_articles)} articles...")
     for a in all_user_articles:
         res = summarize_article(a['title'], a['summary'])
         if res and "【キーワード】" in res:
@@ -161,6 +168,7 @@ def deliver_news_to_user(user_id):
             a['relevant_keywords'] = ""
         time.sleep(1)
 
+    print(f"[DEBUG] Sending {len(all_user_articles)} articles to LINE...")
     # まとめて送信 (LINEカルーセルの10件制限に従って分割送信)
     for i in range(0, len(all_user_articles), 10):
         chunk = all_user_articles[i:i+10]
