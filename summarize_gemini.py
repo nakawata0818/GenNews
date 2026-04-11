@@ -33,7 +33,7 @@ def summarize_article(title: str, summary: str) -> str:
     content = f"タイトル: {title}\n内容: {summary}"
 
     # 試行するモデルの優先順位リスト
-    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'] # 安定版を優先し、存在しないモデルを削除
+    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'] 
 
     for model_name in models_to_try:
         if model_name in _DISABLED_MODELS:
