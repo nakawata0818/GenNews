@@ -5,6 +5,9 @@ from config import GEMINI_API_KEY
 # クォータ制限や存在しないモデルを一時的に記録して、今回の実行（プロセス内）で再試行しないようにする
 _DISABLED_MODELS = set()
 
+# 利用可能なモデルのキャッシュ
+_DYNAMIC_MODELS_CACHE = []
+
 PROMPT = """
 以下の記事を日本語で要約し、関連するキーワードを抽出してください。
 
@@ -37,12 +40,30 @@ def list_available_models():
             print(f"Name: {model.name}, Display: {model.display_name}")
 
 def summarize_article(title: str, summary: str) -> str:
+    global _DYNAMIC_MODELS_CACHE
     client = genai.Client(api_key=GEMINI_API_KEY)
     content = f"タイトル: {title}\n内容: {summary}"
 
-    # 試行するモデルの優先順位リスト
-    # 重複を削除し、タイポを修正しました。最新の安定版を優先します。
-    models_to_try = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'] 
+    # 初回呼び出し時に動的にモデルリストを取得して最新順にソート
+    if not _DYNAMIC_MODELS_CACHE:
+        try:
+            discovered_models = []
+            for m in client.models.list():
+                if 'generateContent' in m.supported_actions:
+                    # 'models/' プレフィックスを削除して名前を統一
+                    clean_name = m.name.replace('models/', '')
+                    discovered_models.append(clean_name)
+            
+            # 文字列の降順ソートにより、gemini-2.0 > gemini-1.5 のように最新モデルを優先する
+            discovered_models.sort(reverse=True)
+            _DYNAMIC_MODELS_CACHE = discovered_models
+            print(f"[INFO] Dynamically discovered models (latest first): {_DYNAMIC_MODELS_CACHE}")
+        except Exception as e:
+            print(f"[Error] Failed to fetch models dynamically: {e}")
+            # APIからの取得に失敗した場合のフォールバック
+            _DYNAMIC_MODELS_CACHE = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+
+    models_to_try = _DYNAMIC_MODELS_CACHE
 
     for model_name in models_to_try:
         if model_name in _DISABLED_MODELS:
