@@ -38,3 +38,19 @@ def get_category(keyword):
     # 4. シートに保存
     save_category_mapping(keyword, normalized)
     return normalized
+
+def recategorize_user_keywords(user_id):
+    """ユーザーの全キーワードを再カテゴライズする"""
+    from category_suggester import suggest_categories_batch
+    from sheet_utils import get_user_keywords, save_category_mapping
+    
+    user_kws = get_user_keywords(user_id)
+    if not user_kws:
+        return
+    
+    kw_names = [kw for kw, weight in user_kws]
+    # LLMでまとめてカテゴライズ
+    mapping = suggest_categories_batch(kw_names)
+    
+    for kw, cat in mapping.items():
+        save_category_mapping(kw, normalize_category(cat))

@@ -109,6 +109,26 @@ def linewebhook():
                 reply_text = f"キーワードを更新しました:\n{keywords_str}"
                 reply_message(event['replyToken'], reply_text)
 
+            elif user_text.startswith('キーワード追加:'):
+                kw = user_text.replace('キーワード追加:', '').strip()
+                if kw:
+                    update_keyword_weight(user_id, kw, 0.0)
+                    recategorize_user_keywords(user_id)
+                    reply_message(event['replyToken'], f"キーワード「{kw}」を追加し、全体のカテゴリを再構成しました。")
+                else:
+                    reply_message(event['replyToken'], "追加するキーワードを指定してください。例「キーワード追加:AI」")
+
+            elif user_text.startswith('キーワード削除:'):
+                kw = user_text.replace('キーワード削除:', '').strip()
+                if kw:
+                    if delete_user_keyword(user_id, kw):
+                        recategorize_user_keywords(user_id)
+                        reply_message(event['replyToken'], f"キーワード「{kw}」を削除し、全体のカテゴリを再構成しました。")
+                    else:
+                        reply_message(event['replyToken'], f"キーワード「{kw}」が見つかりませんでした。")
+                else:
+                    reply_message(event['replyToken'], "削除するキーワードを指定してください。例「キーワード削除:AI」")
+
             elif user_text.startswith('キーワード確認'):
                 try:
                     # keywordsシートから取得
