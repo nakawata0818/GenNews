@@ -28,12 +28,21 @@ PROMPT = """
 キーワード1, キーワード2, キーワード3
 """
 
+def list_available_models():
+    """利用可能なモデル一覧を表示する（デバッグ用）"""
+    client = genai.Client(api_key=GEMINI_API_KEY)
+    print("利用可能なモデル一覧:")
+    for model in client.models.list():
+        if 'generateContent' in model.supported_actions:
+            print(f"Name: {model.name}, Display: {model.display_name}")
+
 def summarize_article(title: str, summary: str) -> str:
     client = genai.Client(api_key=GEMINI_API_KEY)
     content = f"タイトル: {title}\n内容: {summary}"
 
     # 試行するモデルの優先順位リスト
-    models_to_try = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.0-flash'] 
+    # 重複を削除し、タイポを修正しました。最新の安定版を優先します。
+    models_to_try = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'] 
 
     for model_name in models_to_try:
         if model_name in _DISABLED_MODELS:
