@@ -163,7 +163,7 @@ def promote_keywords(user_id):
         
         for idx, kw in reversed(to_promote): # 下から削除しないと行番号がずれるため
             update_keyword_weight(user_id, kw, -0.2) # 初期weight 0.8にするため(1.0 + -0.2)
-            rel_sheet.delete_row(idx)
+            rel_sheet.delete_rows(idx)
             print(f"[PROMOTION] {kw} moved to main keywords for {user_id}")
     except Exception as e:
         print(f"[Error] promote_keywords: {e}")
@@ -181,7 +181,7 @@ def delete_user_keyword(user_id, keyword):
             s_target_kw = str(keyword).strip()
 
             if s_uid == s_target_uid and s_kw == s_target_kw:
-                sheet.delete_row(idx)
+                sheet.delete_rows(idx)
                 print(f"[DEBUG] Deleted row {idx} for user {user_id}, keyword {keyword}")
                 return True
     except Exception as e:
@@ -269,9 +269,15 @@ def update_keyword_weight(user_id, keyword, delta):
     sheet.append_row([user_id, keyword, max(0.0, 1.0 + delta)])
 
 def get_sheet_by_name(name):
-    """名前を指定してワークシートを取得（クライアントを再利用）"""
-    client = get_gspread_client()
-    return client.open_by_key(GOOGLE_SHEET_KEY).worksheet(name)
+    """名前を指定してワークシートを取得（キャッシュを利用してAPI呼び出しを最小化）"""
+    global _spreadsheet, _worksheets
+    if _spreadsheet is None:
+        client = get_gspread_client()
+        _spreadsheet = client.open_by_key(GOOGLE_SHEET_KEY)
+    
+    if name not in _worksheets:
+        _worksheets[name] = _spreadsheet.worksheet(name)
+    return _worksheets[name]
 
 def get_gspread_client():
     """gspreadクライアントを取得、未認証の場合は認証を行う"""
