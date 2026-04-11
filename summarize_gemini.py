@@ -50,9 +50,7 @@ def summarize_article(title: str, summary: str) -> str:
             discovered_models = []
             for m in client.models.list():
                 if 'generateContent' in m.supported_actions:
-                    # 'models/' プレフィックスを削除して名前を統一
-                    clean_name = m.name.replace('models/', '')
-                    discovered_models.append(clean_name)
+                    discovered_models.append(m.name)
             
             # 文字列の降順ソートにより、gemini-2.0 > gemini-1.5 のように最新モデルを優先する
             discovered_models.sort(reverse=True)
