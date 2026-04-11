@@ -75,6 +75,12 @@ def save_category_mapping(keyword, category):
     """category_mapシートに新しい分類を保存"""
     try:
         sheet = get_sheet_by_name('category_map')
+        records = sheet.get_all_records()
+        # 既存のキーワードがあればカテゴリを更新
+        for idx, row in enumerate(records, start=2):
+            if row.get('keyword') == keyword:
+                sheet.update_cell(idx, 2, category)
+                return
         sheet.append_row([keyword, category])
     except Exception as e:
         print(f"[sheet_utils error] save_category_mapping: {e}")
@@ -144,6 +150,20 @@ def promote_keywords(user_id):
             print(f"[PROMOTION] {kw} moved to main keywords for {user_id}")
     except Exception as e:
         print(f"[Error] promote_keywords: {e}")
+
+def delete_user_keyword(user_id, keyword):
+    """keywordsシートから指定ユーザーのキーワードを削除"""
+    try:
+        sheet = get_sheet_by_name('keywords')
+        records = sheet.get_all_records()
+        # ユーザーIDとキーワードが一致する行を探して削除
+        for idx, row in enumerate(records, start=2):
+            if str(row.get('user_id', '')).strip() == str(user_id).strip() and row.get('keyword') == keyword:
+                sheet.delete_rows(idx)
+                return True
+    except Exception as e:
+        print(f"[Error] delete_user_keyword: {e}")
+    return False
 
 def save_exposure(user_id, keywords):
     """露出を記録"""
