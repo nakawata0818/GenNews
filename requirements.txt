@@ -8,3 +8,5 @@ google-generativeai
 gspread
 oauth2client
 google-genai
+google-cloud-texttospeech
+google-cloud-storage

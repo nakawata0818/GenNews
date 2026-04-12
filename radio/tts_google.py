@@ -1,4 +1,4 @@
-from google.cloud import texttospeech
+from google.cloud import texttospeech_v1 as texttospeech
 import base64
 import os
 import json
