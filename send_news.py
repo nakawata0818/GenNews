@@ -14,11 +14,9 @@ from category import get_category
 from line_format import create_carousel
 from config import LINE_CHANNEL_ACCESS_TOKEN
 from datetime import datetime, timezone, timedelta
-from radio.send_radio import run_radio_flow
 
 def get_time_of_day_label():
     """現在の日本時間から 朝/昼/夕方/夜 のラベルを返す"""
-    # Render等のサーバー時間はUTCなことが多いため、JST(UTC+9)に変換
     jst = timezone(timedelta(hours=9))
     hour = datetime.now(jst).hour
     if 5 <= hour < 11: return "今日の朝"
@@ -116,7 +114,7 @@ def get_prepared_articles(user_id):
     """配信用の記事を選定してリストで返す（送信はしない）"""
     user_keywords = get_user_keywords(user_id)
     if not user_keywords: return []
-    print(f"[DEBUG] get_prepared_articles: user_id={user_id}, keywords_count={len(user_keywords)}")
+    print(f"[DEBUG] get_prepared_articles start: keywords={len(user_keywords)}")
     
     cat_to_kws = {}
     for kw, w in user_keywords:
@@ -131,10 +129,10 @@ def get_prepared_articles(user_id):
     
     all_articles = []
     for category, kws in cat_to_kws.items():
-        print(f"[DEBUG] Processing category: {category}")
+        print(f"[DEBUG]   Processing category: {category}")
         kw_names = [k for k, w in kws]
         articles = deduplicate_articles(fetch_rss_articles(kw_names))
-        print(f"[DEBUG]   Fetched {len(articles)} articles for {category}")
+        print(f"[DEBUG]   Fetched {len(articles)} unique articles")
 
         processed = []
         for a in articles:
@@ -145,7 +143,7 @@ def get_prepared_articles(user_id):
             processed.append((score, a))
         
         selected = select_311_articles(processed, sent_ids, user_profile.get("raw_logs", []))
-        print(f"[DEBUG]   Selected {len(selected)} articles for {category}")
+        print(f"[DEBUG]   Selected {len(selected)} articles for delivery")
         for a in selected: a['category'] = category
         all_articles.extend(selected)
     return all_articles
@@ -157,23 +155,17 @@ def deliver_news_to_user(user_id):
     if not all_user_articles:
         print(f"[DEBUG] No new articles found for {user_id}")
         return
-    print(f"[DEBUG] deliver_news_to_user: total_articles={len(all_user_articles)}")
 
     user_profile = generate_user_profile(user_id)
     user_profile['related_keywords'] = get_related_keywords(user_id)
     # 既存の関連キーワードをリスト化して要約時に渡す準備
     existing_rel_kws = [rk.get('keyword', '') for rk in user_profile.get('related_keywords', [])]
-    print(f"[DEBUG] deliver_news_to_user: user_profile loaded. keywords_count={len(existing_rel_kws)}")
-    
-    time_label = get_time_of_day_label()
-    print(f"[DEBUG] Time of day label: {time_label}")
 
     # まとめて要約
     total_summaries = len(all_user_articles)
     print(f"[DEBUG] Summarizing {total_summaries} articles...")
     for i, a in enumerate(all_user_articles):
-        start_time = time.time()
-        print(f"[DEBUG] Summarizing [{i+1}/{total_summaries}]: START - {a.get('title')[:30]}...")
+        print(f"[DEBUG] Summarizing [{i+1}/{total_summaries}]: {a.get('title')[:30]}...")
         res = summarize_article(a['title'], a['summary'], existing_related_keywords=existing_rel_kws)
         if res and "【キーワード】" in res:
             parts = res.split("【キーワード】")
@@ -182,8 +174,7 @@ def deliver_news_to_user(user_id):
         else:
             a['summary'] = res if res else ""
             a['relevant_keywords'] = ""
-        duration = time.time() - start_time
-        print(f"[DEBUG] Summarizing [{i+1}/{total_summaries}]: END ({duration:.2f}s)")
+        time.sleep(1)
 
     print(f"[DEBUG] Sending {len(all_user_articles)} articles to LINE...")
     # まとめて送信 (LINEカルーセルの10件制限に従って分割送信)
@@ -191,16 +182,8 @@ def deliver_news_to_user(user_id):
         chunk = all_user_articles[i:i+10]
         carousel = create_carousel(chunk)
         send_line_flex(user_id, carousel)
-    print(f"[DEBUG] Finished sending Flex Messages.")
-
-    # ラジオ配信を実行 (同じ記事セットを使用)
-    print(f"[DEBUG] Radio flow: START")
-    radio_start = time.time()
-    run_radio_flow(user_id, all_user_articles, time_label)
-    print(f"[DEBUG] Radio flow: END ({time.time() - radio_start:.2f}s)")
 
     # 露出の記録
-    print(f"[DEBUG] Recording exposure and history...")
     for a in all_user_articles:
         save_exposure(user_id, a.get('matched_keywords', []))
 
@@ -212,7 +195,6 @@ def deliver_news_to_user(user_id):
     
     # キーワード昇格判定
     promote_keywords(user_id)
-    print(f"[DEBUG] deliver_news_to_user: FINISHED for {user_id}")
 
 def main():
     user_ids = get_all_user_ids()

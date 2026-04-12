@@ -6,7 +6,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests
 from config import LINE_CHANNEL_ACCESS_TOKEN, RENDER_HOSTNAME
-from send_news import get_prepared_articles # 後ほど send_news.py に追加
 from radio.radio_script import generate_radio_script
 from radio.tts_google import generate_audio
 import os
@@ -66,8 +65,11 @@ def send_line_text(user_id, text):
 if __name__ == "__main__":
     # コマンドラインから直接実行してテストするためのブロック
     from config import LINE_USER_ID
+    # 循環インポート回避のため、ここで読み込む
+    from send_news import get_prepared_articles
     if LINE_USER_ID:
-        print(f"[TEST] ユーザー {LINE_USER_ID} 宛にラジオ配信テストを開始します...")
-        run_radio_flow(LINE_USER_ID)
+        print(f"[TEST] Starting standalone radio test for {LINE_USER_ID}...")
+        articles = get_prepared_articles(LINE_USER_ID)
+        run_radio_flow(LINE_USER_ID, articles, "テスト配信")
     else:
         print("エラー: config.py または環境変数に LINE_USER_ID が設定されていません。")
