@@ -42,15 +42,22 @@ def run_radio_flow(user_id):
 
     # 5. LINE送信
     print(f"[RADIO] Sending audio to LINE...")
-    send_audio_message(user_id, audio_url)
+    send_audio_message(user_id, audio_url, articles)
 
-def send_audio_message(user_id, audio_url):
+def send_audio_message(user_id, audio_url, articles):
     headers = {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}", "Content-Type": "application/json"}
+    
+    # 記事のURLリストを作成
+    url_list_text = "📖 ラジオで紹介した記事はこちら：\n\n"
+    for i, a in enumerate(articles, 1):
+        url_list_text += f"{i}. {a.get('title')}\n{a.get('url')}\n\n"
+
     data = {
         "to": user_id,
         "messages": [
             {"type": "text", "text": "🎧 本日のパーソナライズニュースラジオです。"},
-            {"type": "audio", "originalContentUrl": audio_url, "duration": 600000} # 最大10分 (600,000ms)
+            {"type": "audio", "originalContentUrl": audio_url, "duration": 600000}, # 最大10分 (600,000ms)
+            {"type": "text", "text": url_list_text.strip()}
         ]
     }
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=data)
