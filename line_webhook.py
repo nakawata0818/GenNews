@@ -148,7 +148,7 @@ def linewebhook():
                         reply_message(event['replyToken'], "有効な数字を入力するか「キャンセル」と送ってください。")
                 continue
 
-            if user_text == 'もっと':
+            if user_text == 'もっと' or user_text == 'もっとニュース':
                 # 非同期で実行
                 thread = threading.Thread(target=safe_get_more_news, args=(user_id,))
                 thread.start()
@@ -159,6 +159,12 @@ def linewebhook():
                 thread = threading.Thread(target=safe_deliver_news, args=(user_id,))
                 thread.start()
                 reply_message(event['replyToken'], 'ニュースの生成を開始しました。完了次第お届けします。')
+
+            elif user_text == 'ニュース配信':
+                # テキストとラジオの両方を統合して実行
+                thread = threading.Thread(target=safe_deliver_news, args=(user_id,))
+                thread.start()
+                reply_message(event['replyToken'], '📖 ニュースと🎧 ラジオを準備しています。数分ほどお待ちください。')
 
             elif user_text == 'ラジオ':
                 # ラジオ生成は非常に重いためスレッドで実行

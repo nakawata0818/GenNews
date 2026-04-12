@@ -47,7 +47,7 @@ def cleanup_llm_output(text):
     # Markdownの強調記号（*）を削除（TTSが「アスタリスク」と読むのを防ぐ）
     text = text.replace('*', '')
     # 冒頭によくあるメタ発言（承知いたしました、以下にまとめます等）を削除
-    text = re.sub(r'^.*?(承知いたしました|わかりました|まとめます|出力します|構成します|紹介します|作成しました)[:：\n\s]*', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    text = re.sub(r'^.*?(承知いたしました|わかりました|かしこまりました|まとめます|出力します|構成します|紹介します|作成しました|提示します)[:：\n\s]*', '', text, flags=re.MULTILINE | re.IGNORECASE)
     return text.strip()
 
 def get_models_to_try(client):

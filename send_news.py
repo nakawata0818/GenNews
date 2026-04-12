@@ -147,6 +147,8 @@ def deliver_news_to_user(user_id):
     user_profile['related_keywords'] = get_related_keywords(user_id)
     # 既存の関連キーワードをリスト化して要約時に渡す準備
     existing_rel_kws = [rk.get('keyword', '') for rk in user_profile.get('related_keywords', [])]
+    
+    time_label = get_time_of_day_label()
 
     # まとめて要約
     total_summaries = len(all_user_articles)
@@ -169,6 +171,10 @@ def deliver_news_to_user(user_id):
         chunk = all_user_articles[i:i+10]
         carousel = create_carousel(chunk)
         send_line_flex(user_id, carousel)
+
+    # ラジオ配信を実行 (同じ記事セットを使用)
+    print(f"[DEBUG] Integrating Radio flow...")
+    run_radio_flow(user_id, all_user_articles, time_label)
 
     # 露出の記録
     for a in all_user_articles:
