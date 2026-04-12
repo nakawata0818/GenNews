@@ -105,6 +105,7 @@ def get_prepared_articles(user_id):
     """配信用の記事を選定してリストで返す（送信はしない）"""
     user_keywords = get_user_keywords(user_id)
     if not user_keywords: return []
+    print(f"[DEBUG] get_prepared_articles: user_id={user_id}, keywords_count={len(user_keywords)}")
     
     cat_to_kws = {}
     for kw, w in user_keywords:
@@ -119,9 +120,11 @@ def get_prepared_articles(user_id):
     
     all_articles = []
     for category, kws in cat_to_kws.items():
+        print(f"[DEBUG] Processing category: {category}")
         kw_names = [k for k, w in kws]
         articles = deduplicate_articles(fetch_rss_articles(kw_names))
-        
+        print(f"[DEBUG]   Fetched {len(articles)} articles for {category}")
+
         processed = []
         for a in articles:
             features = extract_features(a)
@@ -131,6 +134,7 @@ def get_prepared_articles(user_id):
             processed.append((score, a))
         
         selected = select_311_articles(processed, sent_ids, user_profile.get("raw_logs", []))
+        print(f"[DEBUG]   Selected {len(selected)} articles for {category}")
         for a in selected: a['category'] = category
         all_articles.extend(selected)
     return all_articles
@@ -149,12 +153,14 @@ def deliver_news_to_user(user_id):
     existing_rel_kws = [rk.get('keyword', '') for rk in user_profile.get('related_keywords', [])]
     
     time_label = get_time_of_day_label()
+    print(f"[DEBUG] Time of day label: {time_label}")
 
     # まとめて要約
     total_summaries = len(all_user_articles)
     print(f"[DEBUG] Summarizing {total_summaries} articles...")
     for i, a in enumerate(all_user_articles):
-        print(f"[DEBUG] Summarizing [{i+1}/{total_summaries}]: {a.get('title')[:30]}...")
+        start_time = time.time()
+        print(f"[DEBUG] Summarizing [{i+1}/{total_summaries}]: START - {a.get('title')[:30]}...")
         res = summarize_article(a['title'], a['summary'], existing_related_keywords=existing_rel_kws)
         if res and "【キーワード】" in res:
             parts = res.split("【キーワード】")
@@ -163,7 +169,8 @@ def deliver_news_to_user(user_id):
         else:
             a['summary'] = res if res else ""
             a['relevant_keywords'] = ""
-        time.sleep(1)
+        duration = time.time() - start_time
+        print(f"[DEBUG] Summarizing [{i+1}/{total_summaries}]: END ({duration:.2f}s)")
 
     print(f"[DEBUG] Sending {len(all_user_articles)} articles to LINE...")
     # まとめて送信 (LINEカルーセルの10件制限に従って分割送信)
@@ -173,10 +180,13 @@ def deliver_news_to_user(user_id):
         send_line_flex(user_id, carousel)
 
     # ラジオ配信を実行 (同じ記事セットを使用)
-    print(f"[DEBUG] Integrating Radio flow...")
+    print(f"[DEBUG] Radio flow: START")
+    radio_start = time.time()
     run_radio_flow(user_id, all_user_articles, time_label)
+    print(f"[DEBUG] Radio flow: END ({time.time() - radio_start:.2f}s)")
 
     # 露出の記録
+    print(f"[DEBUG] Recording exposure and history...")
     for a in all_user_articles:
         save_exposure(user_id, a.get('matched_keywords', []))
 
@@ -188,6 +198,7 @@ def deliver_news_to_user(user_id):
     
     # キーワード昇格判定
     promote_keywords(user_id)
+    print(f"[DEBUG] deliver_news_to_user: FINISHED for {user_id}")
 
 def main():
     user_ids = get_all_user_ids()

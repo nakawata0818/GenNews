@@ -1,4 +1,5 @@
 import sys
+import time
 import os
 # プロジェクトのルートディレクトリを検索パスに追加して config や send_news を読み込めるようにする
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -10,23 +11,17 @@ from radio.radio_script import generate_radio_script
 from radio.tts_google import generate_audio
 import os
 
-def run_radio_flow(user_id):
+def run_radio_flow(user_id, articles, time_of_day_label):
     """ラジオニュース配信のメインフロー"""
-    # 1. ニュース記事の選定 (既存ロジックを流用)
-    print(f"[RADIO] Fetching articles for {user_id}")
-    articles = get_prepared_articles(user_id)
-    print(f"[RADIO] {len(articles)} articles selected for the script.")
-    
-    if not articles:
-        send_line_text(user_id, "ラジオで放送できる新しいニュースが見つかりませんでした。")
-        return
+    print(f"[DEBUG][RADIO] Starting radio flow for {user_id} with {len(articles)} articles")
 
     # 2. 台本生成
     print(f"[RADIO] Generating script...")
-    script = generate_radio_script(articles)
+    script = generate_radio_script(articles, time_of_day_label)
 
     # 3. 音声生成
     print(f"[RADIO] Generating audio...")
+    tts_start = time.time()
     audio_res = generate_audio(script)
     
     if not audio_res:
@@ -34,33 +29,34 @@ def run_radio_flow(user_id):
         return
     
     filename, audio_path = audio_res
-    print(f"[RADIO] Audio generated successfully: {filename}")
+    print(f"[DEBUG][RADIO] Audio generated: {filename} at {audio_path}. ({time.time() - tts_start:.2f}s)")
 
     # 4. URL生成 (Renderまたはngrokのホスト名を使用)
     audio_url = f"https://{RENDER_HOSTNAME}/audio/{filename}"
-    print(f"[RADIO] Audio URL: {audio_url}")
+    print(f"[DEBUG][RADIO] Audio URL: {audio_url}")
 
     # 5. LINE送信
-    print(f"[RADIO] Sending audio to LINE...")
-    send_audio_message(user_id, audio_url, articles)
+    print(f"[DEBUG][RADIO] Sending audio and URLs to LINE...")
+    send_audio_message(user_id, audio_url, articles, time_of_day_label)
 
-def send_audio_message(user_id, audio_url, articles):
+def send_audio_message(user_id, audio_url, articles, time_of_day_label):
     headers = {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}", "Content-Type": "application/json"}
     
     # 記事のURLリストを作成
-    url_list_text = "📖 ラジオで紹介した記事はこちら：\n\n"
+    url_list_text = f"📖 {time_of_day_label}のニュース記事一覧：\n\n"
     for i, a in enumerate(articles, 1):
         url_list_text += f"{i}. {a.get('title')}\n{a.get('url')}\n\n"
 
     data = {
         "to": user_id,
         "messages": [
-            {"type": "text", "text": "🎧 本日のパーソナライズニュースラジオです。"},
+            {"type": "text", "text": f"🎧 {time_of_day_label}のパーソナライズニュースラジオです。"},
             {"type": "audio", "originalContentUrl": audio_url, "duration": 600000}, # 最大10分 (600,000ms)
             {"type": "text", "text": url_list_text.strip()}
         ]
     }
-    requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=data)
+    res = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=data)
+    print(f"[DEBUG][RADIO] LINE API Response: {res.status_code}")
 
 def send_line_text(user_id, text):
     headers = {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}", "Content-Type": "application/json"}
