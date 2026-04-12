@@ -14,6 +14,17 @@ from category import get_category
 from line_format import create_carousel
 from config import LINE_CHANNEL_ACCESS_TOKEN
 from datetime import datetime, timezone, timedelta
+from radio.send_radio import run_radio_flow
+
+def get_time_of_day_label():
+    """現在の日本時間から 朝/昼/夕方/夜 のラベルを返す"""
+    # Render等のサーバー時間はUTCなことが多いため、JST(UTC+9)に変換
+    jst = timezone(timedelta(hours=9))
+    hour = datetime.now(jst).hour
+    if 5 <= hour < 11: return "今日の朝"
+    elif 11 <= hour < 14: return "今日のお昼"
+    elif 14 <= hour < 18: return "今日の夕方"
+    else: return "今日の夜"
 
 def send_line_flex(user_id, flex_json):
     """Flex MessageをLINEに送信"""
@@ -146,11 +157,13 @@ def deliver_news_to_user(user_id):
     if not all_user_articles:
         print(f"[DEBUG] No new articles found for {user_id}")
         return
+    print(f"[DEBUG] deliver_news_to_user: total_articles={len(all_user_articles)}")
 
     user_profile = generate_user_profile(user_id)
     user_profile['related_keywords'] = get_related_keywords(user_id)
     # 既存の関連キーワードをリスト化して要約時に渡す準備
     existing_rel_kws = [rk.get('keyword', '') for rk in user_profile.get('related_keywords', [])]
+    print(f"[DEBUG] deliver_news_to_user: user_profile loaded. keywords_count={len(existing_rel_kws)}")
     
     time_label = get_time_of_day_label()
     print(f"[DEBUG] Time of day label: {time_label}")
@@ -178,6 +191,7 @@ def deliver_news_to_user(user_id):
         chunk = all_user_articles[i:i+10]
         carousel = create_carousel(chunk)
         send_line_flex(user_id, carousel)
+    print(f"[DEBUG] Finished sending Flex Messages.")
 
     # ラジオ配信を実行 (同じ記事セットを使用)
     print(f"[DEBUG] Radio flow: START")
