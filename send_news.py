@@ -155,6 +155,10 @@ def deliver_news_to_user(user_id):
     if not all_user_articles:
         print(f"[DEBUG] No new articles found for {user_id}")
         return
+    print(f"[DEBUG] deliver_news_to_user: {len(all_user_articles)} articles collected.")
+
+    time_label = get_time_of_day_label()
+    print(f"[DEBUG] Using time label: {time_label}")
 
     user_profile = generate_user_profile(user_id)
     user_profile['related_keywords'] = get_related_keywords(user_id)
@@ -182,11 +186,13 @@ def deliver_news_to_user(user_id):
         chunk = all_user_articles[i:i+10]
         carousel = create_carousel(chunk)
         send_line_flex(user_id, carousel)
+    print(f"[DEBUG] All Flex carousel messages sent to user.")
 
     # ニュース配信後に同じスレッドでラジオ配信を実行
-    print(f"[DEBUG] Flex messages sent. Starting radio flow...")
+    print(f"[DEBUG] Starting radio integration for {time_label}...")
     from radio.send_radio import run_radio_flow
     run_radio_flow(user_id, all_user_articles, time_label)
+    print(f"[DEBUG] deliver_news_to_user: Full process completed for {user_id}")
 
     # 露出の記録
     for a in all_user_articles:

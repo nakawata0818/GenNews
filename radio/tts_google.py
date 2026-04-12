@@ -18,8 +18,8 @@ def generate_audio(text):
     """テキストをMP3音声ファイルに変換する (5000バイト制限対応版)"""
     client = init_tts_client()
 
-    # 1500文字ごとに分割 (日本語は3バイト/文字なので、1500*3 = 4500バイトで安全圏)
-    chunk_size = 1500
+    # 1000文字ごとに分割 (日本語は3バイト/文字なので、1000*3 = 3000バイトで安全圏。API制限5000バイト対策)
+    chunk_size = 1000
     chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
     
     combined_audio_content = b""
