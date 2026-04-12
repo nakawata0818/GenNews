@@ -50,7 +50,7 @@ def send_audio_message(user_id, audio_url):
         "to": user_id,
         "messages": [
             {"type": "text", "text": "🎧 本日のパーソナライズニュースラジオです。"},
-            {"type": "audio", "originalContentUrl": audio_url, "duration": 90000} # 最大90秒
+            {"type": "audio", "originalContentUrl": audio_url, "duration": 600000} # 最大10分 (600,000ms)
         ]
     }
     requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=data)

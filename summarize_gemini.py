@@ -1,4 +1,5 @@
 import time
+import re
 from google import genai
 from config import GEMINI_API_KEY
 
@@ -38,6 +39,16 @@ def list_available_models():
     for model in client.models.list():
         if 'generateContent' in model.supported_actions:
             print(f"Name: {model.name}, Display: {model.display_name}")
+
+def cleanup_llm_output(text):
+    """LLMの出力から不要なメタ発言や記号を削除する"""
+    if not text:
+        return ""
+    # Markdownの強調記号（*）を削除（TTSが「アスタリスク」と読むのを防ぐ）
+    text = text.replace('*', '')
+    # 冒頭によくあるメタ発言（承知いたしました、以下にまとめます等）を削除
+    text = re.sub(r'^.*?(承知いたしました|わかりました|まとめます|出力します|構成します|紹介します|作成しました)[:：\n\s]*', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    return text.strip()
 
 def get_models_to_try(client):
     """動的にモデルリストを取得し最新順にソートする（キャッシュ利用）"""
@@ -91,7 +102,7 @@ def generate_content_with_retry(client, contents):
                     time.sleep(2 ** i)
                     continue
                 break
-    return None
+    return ""
 
 def summarize_article(title: str, summary: str, existing_related_keywords: list = None) -> str:
     client = genai.Client(api_key=GEMINI_API_KEY)
@@ -106,7 +117,7 @@ def summarize_article(title: str, summary: str, existing_related_keywords: list 
     
     res_text = generate_content_with_retry(client, PROMPT + extra_instruction + "\n" + content)
     if res_text:
-        return res_text
+        return cleanup_llm_output(res_text)
 
     # すべてのモデルが失敗した場合のフォールバック
     print(f"[WARN] All Gemini models failed for: {title}. Returning original snippet.")
