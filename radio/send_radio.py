@@ -44,10 +44,6 @@ def run_radio_flow(user_id):
     print(f"[RADIO] Sending audio to LINE...")
     send_audio_message(user_id, audio_url)
 
-    # 一時ファイルの削除
-    if os.path.exists(audio_path):
-        os.remove(audio_path)
-
 def send_audio_message(user_id, audio_url):
     headers = {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}", "Content-Type": "application/json"}
     data = {
