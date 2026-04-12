@@ -50,8 +50,11 @@ def save_sent_articles(user_id, article_ids):
     historyシートに送信済み記事を追加
     """
     sheet = get_sheet_by_name('history')
-    for aid in article_ids:
-        sheet.append_row([user_id, aid, datetime.now(timezone.utc).isoformat()])
+    if not article_ids:
+        return
+    timestamp = datetime.now(timezone.utc).isoformat()
+    rows = [[user_id, aid, timestamp] for aid in article_ids]
+    sheet.append_rows(rows)
 
 def get_all_user_ids():
     """keywordsシートからユニークなユーザーID一覧を取得"""
@@ -115,6 +118,23 @@ def save_article_log(user_id, article_id, keywords, category, action):
     # 指示書3.3の構造: user_id | article_id | keywords | related_keywords | category | action | timestamp
     # 今回は簡易的に引数を増やさず、既存の仕組みを壊さない形で実装
     sheet.append_row([user_id, article_id, kw_str, "", category, action, timestamp])
+
+def save_article_logs_batch(user_id, articles_data, action):
+    """
+    複数の記事ログをまとめて保存（API節約版）
+    articles_data: List of dicts with {url, matched_keywords, category}
+    """
+    if not articles_data:
+        return
+    sheet = get_sheet_by_name('article_log')
+    timestamp = datetime.now(timezone.utc).isoformat()
+    rows = []
+    for a in articles_data:
+        kw_list = a.get('matched_keywords', [])
+        kw_str = ",".join(kw_list) if isinstance(kw_list, list) else kw_list
+        rows.append([user_id, a.get('url'), kw_str, "", a.get('category', 'その他'), action, timestamp])
+    
+    sheet.append_rows(rows)
 
 def get_related_keywords(user_id):
     """related_keywordsシートから取得"""

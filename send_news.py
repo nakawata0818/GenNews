@@ -2,7 +2,7 @@ import os
 import time
 import random
 import requests
-from sheet_utils import get_user_keywords, get_all_user_ids, get_sent_article_ids, save_sent_articles, save_article_log, get_sheet_by_name, save_exposure, calculate_exposure_score_from_logs, get_all_exposure_logs, promote_keywords, get_related_keywords
+from sheet_utils import get_user_keywords, get_all_user_ids, get_sent_article_ids, save_sent_articles, save_article_log, save_article_logs_batch, get_sheet_by_name, save_exposure, calculate_exposure_score_from_logs, get_all_exposure_logs, promote_keywords, get_related_keywords
 from scoring import score_article
 from rss import fetch_rss_articles
 from dedup import deduplicate_articles
@@ -201,8 +201,7 @@ def deliver_news_to_user(user_id):
     # 保存処理
     current_urls = [a['url'] for a in all_user_articles]
     save_sent_articles(user_id, current_urls)
-    for a in all_user_articles:
-        save_article_log(user_id, a['url'], a['matched_keywords'], a['category'], 'send')
+    save_article_logs_batch(user_id, all_user_articles, 'send')
     
     # キーワード昇格判定
     promote_keywords(user_id)

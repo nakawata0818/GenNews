@@ -44,7 +44,11 @@ def send_audio_message(user_id, audio_url, articles, time_of_day_label):
     # 記事のURLリストを作成
     url_list_text = f"📖 {time_of_day_label}のニュース記事一覧：\n\n"
     for i, a in enumerate(articles, 1):
-        url_list_text += f"{i}. {a.get('title')}\n{a.get('url')}\n\n"
+        line = f"{i}. {a.get('title')}\n{a.get('url')}\n\n"
+        if len(url_list_text) + len(line) > 4800: # 5000文字制限の安全圏
+            url_list_text += "...(以下省略)"
+            break
+        url_list_text += line
 
     data = {
         "to": user_id,
