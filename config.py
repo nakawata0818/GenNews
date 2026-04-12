@@ -11,6 +11,8 @@ LINE_USER_ID = os.getenv('LINE_USER_ID')
 GOOGLE_SHEETS_CRED_JSON = os.getenv('GOOGLE_SHEETS_CRED_JSON')
 GOOGLE_SHEET_KEY = os.getenv('GOOGLE_SHEET_KEY')
 SHEET_NAME = os.getenv('SHEET_NAME')
+GCS_BUCKET_NAME = os.getenv('GCS_BUCKET_NAME')
+RENDER_HOSTNAME = os.getenv('RENDER_EXTERNAL_HOSTNAME') # Renderが自動提供するホスト名
 
 # ニュース取得キーワード
 import json

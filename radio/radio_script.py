@@ -8,7 +8,8 @@ def generate_radio_script(articles):
     client = genai.Client(api_key=GEMINI_API_KEY)
     
     article_text = ""
-    for a in articles:
+    # 記事が多すぎる場合は上位7件程度に絞る
+    for a in articles[:7]:
         article_text += f"カテゴリ: {a.get('category', '一般')}\nタイトル: {a.get('title')}\n内容: {a.get('summary')}\n\n"
 
     prompt = f"""

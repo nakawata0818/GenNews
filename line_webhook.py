@@ -10,7 +10,7 @@ from config import LINE_CHANNEL_ACCESS_TOKEN, SHEET_NAME, GOOGLE_SHEET_KEY
 from sheet_utils import setup_google_credentials, update_keyword_weight, save_article_log, get_sheet_by_name, set_user_keywords, get_user_keywords, update_related_keyword, delete_user_keyword, get_user_state, set_user_state
 from send_news import get_more_news, send_line_flex, deliver_news_to_user
 from feature_extractor import extract_features
-from profile import generate_user_profile, generate_profile_summary
+from user_profile import generate_user_profile, generate_profile_summary
 from category import get_category, recategorize_user_keywords
 from radio.send_radio import run_radio_flow
 

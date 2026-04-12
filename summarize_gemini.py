@@ -46,7 +46,11 @@ def get_models_to_try(client):
         try:
             discovered_models = []
             for m in client.models.list():
-                if 'generateContent' in m.supported_actions:
+                # 'gemini' を含み、かつテキスト生成が可能なモデルのみを抽出
+                name_lower = m.name.lower()
+                if 'generateContent' in m.supported_actions and \
+                   'gemini' in name_lower and \
+                   not any(x in name_lower for x in ['robotics', 'vision', 'image']):
                     discovered_models.append(m.name)
             
             # 文字列の降順ソートにより、gemini-2.0 > gemini-1.5 のように最新モデルを優先する

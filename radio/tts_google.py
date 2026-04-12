@@ -1,12 +1,13 @@
-from google.cloud import texttospeech_v1 as texttospeech
+from google.cloud import texttospeech
 import base64
 import os
 import json
-import tempfile
+import uuid
 
 def init_tts_client():
     # Renderの環境変数から認証情報を取得
-    b64_creds = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+    # どちらの環境変数名でも動作するように対応
+    b64_creds = os.getenv("GOOGLE_CREDENTIALS_BASE64") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if not b64_creds:
         raise Exception("GOOGLE_CREDENTIALS_BASE64 が設定されていません")
     creds_json = base64.b64decode(b64_creds).decode("utf-8")
@@ -37,10 +38,11 @@ def generate_audio(text):
             audio_config=audio_config
         )
         
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
-        with open(tmp.name, "wb") as out:
+        filename = f"{uuid.uuid4()}.mp3"
+        path = f"/tmp/{filename}"
+        with open(path, "wb") as out:
             out.write(response.audio_content)
-        return tmp.name
+        return filename, path
     except Exception as e:
         print(f"[TTS Error] {e}")
         return None

@@ -4,11 +4,10 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests
-from config import LINE_CHANNEL_ACCESS_TOKEN
+from config import LINE_CHANNEL_ACCESS_TOKEN, RENDER_HOSTNAME
 from send_news import get_prepared_articles # 後ほど send_news.py に追加
 from radio.radio_script import generate_radio_script
 from radio.tts_google import generate_audio
-from radio.storage import upload_to_gcs
 import os
 
 def run_radio_flow(user_id):

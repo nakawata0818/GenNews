@@ -8,7 +8,7 @@ from rss import fetch_rss_articles
 from dedup import deduplicate_articles
 from summarize_gemini import summarize_article
 from feature_extractor import extract_features
-from profile import generate_user_profile # for more news category prioritization
+from user_profile import generate_user_profile # for more news category prioritization
 from expand_keywords import expand_keywords
 from category import get_category
 from line_format import create_carousel
@@ -143,8 +143,10 @@ def deliver_news_to_user(user_id):
         print(f"[DEBUG] No new articles found for {user_id}")
         return
 
+    user_profile = generate_user_profile(user_id)
+    user_profile['related_keywords'] = get_related_keywords(user_id)
     # 既存の関連キーワードをリスト化して要約時に渡す準備
-    existing_rel_kws = [rk.get('keyword') for rk in user_profile.get('related_keywords', [])]
+    existing_rel_kws = [rk.get('keyword', '') for rk in user_profile.get('related_keywords', [])]
 
     # まとめて要約
     total_summaries = len(all_user_articles)
