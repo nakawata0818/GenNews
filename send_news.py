@@ -101,56 +101,44 @@ def select_311_articles(processed_list, sent_ids, user_logs):
     return liked + ([explore] if explore else []) + ([retry] if retry else [])
 
 
-def deliver_news_to_user(user_id):
-    """特定のユーザーに対してニュース配信（3:1:1構成）を実行"""
-    print(f"[DEBUG] Starting deliver_news_to_user for {user_id}")
+def get_prepared_articles(user_id):
+    """配信用の記事を選定してリストで返す（送信はしない）"""
     user_keywords = get_user_keywords(user_id)
-    if not user_keywords:
-        print(f"[DEBUG] No keywords found for {user_id}")
-        return
+    if not user_keywords: return []
     
-    # 1. キーワードをカテゴリ別にグループ化
     cat_to_kws = {}
     for kw, w in user_keywords:
         cat = get_category(kw)
         if cat not in cat_to_kws: cat_to_kws[cat] = []
         cat_to_kws[cat].append((kw, w))
         
-    print(f"[DEBUG] Categories identified: {list(cat_to_kws.keys())}")
     user_profile = generate_user_profile(user_id)
-    # 関連キーワード情報をプロファイルに追加
     user_profile['related_keywords'] = get_related_keywords(user_id)
     sent_ids = get_sent_article_ids(user_id)
-    exposure_logs = get_all_exposure_logs(user_id) # ここで一度だけ取得
-    all_user_articles = []
+    exposure_logs = get_all_exposure_logs(user_id)
     
-    # 2. カテゴリごとに記事収集・構成
+    all_articles = []
     for category, kws in cat_to_kws.items():
-        print(f"[DEBUG] Fetching RSS for category: {category}")
         kw_names = [k for k, w in kws]
         articles = deduplicate_articles(fetch_rss_articles(kw_names))
         
-        # スコアリングと特徴付与
         processed = []
         for a in articles:
             features = extract_features(a)
             a.update(features)
-            # ユーザーの登録キーワードがタイトルか要約に含まれているか直接チェック
-            a['matched_keywords'] = [
-                k for k in kw_names 
-                if k.lower() in a.get('title', '').lower() or k.lower() in a.get('summary', '').lower()
-            ]
-            # 高速化されたスコア計算（ログを渡す）
+            a['matched_keywords'] = [k for k in kw_names if k.lower() in a.get('title','').lower()]
             score = score_article(a, kws, user_profile, exposure_func=lambda uid, kw: calculate_exposure_score_from_logs(exposure_logs, kw))
             processed.append((score, a))
         
-        # 3:1:1構成で選定
-        final_articles = select_311_articles(processed, sent_ids, user_profile.get("raw_logs", []))
+        selected = select_311_articles(processed, sent_ids, user_profile.get("raw_logs", []))
+        for a in selected: a['category'] = category
+        all_articles.extend(selected)
+    return all_articles
 
-        for a in final_articles:
-            a['category'] = category
-        all_user_articles.extend(final_articles)
-
+def deliver_news_to_user(user_id):
+    """特定のユーザーに対してニュース配信（3:1:1構成）を実行"""
+    print(f"[DEBUG] Starting deliver_news_to_user for {user_id}")
+    all_user_articles = get_prepared_articles(user_id)
     if not all_user_articles:
         print(f"[DEBUG] No new articles found for {user_id}")
         return

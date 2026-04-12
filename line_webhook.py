@@ -12,6 +12,7 @@ from send_news import get_more_news, send_line_flex, deliver_news_to_user
 from feature_extractor import extract_features
 from profile import generate_user_profile, generate_profile_summary
 from category import get_category, recategorize_user_keywords
+from radio.send_radio import run_radio_flow
 
 app = Flask(__name__)
 
@@ -153,6 +154,12 @@ def linewebhook():
                 thread = threading.Thread(target=safe_deliver_news, args=(user_id,))
                 thread.start()
                 reply_message(event['replyToken'], 'ニュースの生成を開始しました。完了次第お届けします。')
+
+            elif user_text == 'ラジオ':
+                # ラジオ生成は非常に重いためスレッドで実行
+                thread = threading.Thread(target=run_radio_flow, args=(user_id,))
+                thread.start()
+                reply_message(event['replyToken'], '📻 本日のニュースを音声用に編集しています。1〜2分ほどお待ちください。')
 
             # (中略: キーワード更新などのロジックは維持)
             elif user_text.startswith('キーワード:'):
