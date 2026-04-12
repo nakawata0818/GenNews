@@ -27,16 +27,18 @@ def run_radio_flow(user_id):
 
     # 3. 音声生成
     print(f"[RADIO] Generating audio...")
-    audio_path = generate_audio(script)
+    audio_res = generate_audio(script)
     
-    if not audio_path:
+    if not audio_res:
         send_line_text(user_id, "申し訳ありません。音声の生成に失敗しました。")
         return
-    print(f"[RADIO] Audio generated successfully at {audio_path}")
+    
+    filename, audio_path = audio_res
+    print(f"[RADIO] Audio generated successfully: {filename}")
 
-    # 4. アップロード
-    print(f"[RADIO] Uploading to GCS...")
-    audio_url = upload_to_gcs(audio_path, user_id)
+    # 4. URL生成 (Renderまたはngrokのホスト名を使用)
+    audio_url = f"https://{RENDER_HOSTNAME}/audio/{filename}"
+    print(f"[RADIO] Audio URL: {audio_url}")
 
     # 5. LINE送信
     print(f"[RADIO] Sending audio to LINE...")
