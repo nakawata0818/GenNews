@@ -37,6 +37,14 @@ def safe_deliver_news(user_id):
     except Exception as e:
         print(f"[THREAD ERROR] deliver_news: {e}")
 
+def safe_recategorize(user_id):
+    """キーワード再構成を非同期で行う"""
+    try:
+        print(f"[THREAD] recategorize started for {user_id}")
+        recategorize_user_keywords(user_id)
+    except Exception as e:
+        print(f"[THREAD ERROR] recategorize: {e}")
+
 @app.route("/linewebhook", methods=['POST'])
 def linewebhook():
     try:
@@ -119,7 +127,7 @@ def linewebhook():
                 else:
                     kw = user_text
                     update_keyword_weight(user_id, kw, 0.0)
-                    recategorize_user_keywords(user_id)
+                    threading.Thread(target=safe_recategorize, args=(user_id,)).start()
                     set_user_state(user_id, 'IDLE')
                     reply_message(event['replyToken'], f"キーワード「{kw}」を追加し、カテゴリを再構成しました。")
                 continue
@@ -137,7 +145,7 @@ def linewebhook():
                         if 1 <= num <= len(user_kws):
                             kw_to_del = user_kws[num-1][0]
                             if delete_user_keyword(user_id, kw_to_del):
-                                recategorize_user_keywords(user_id)
+                                threading.Thread(target=safe_recategorize, args=(user_id,)).start()
                                 set_user_state(user_id, 'IDLE')
                                 reply_message(event['replyToken'], f"キーワード「{kw_to_del}」を削除し、カテゴリを再構成しました。")
                             else:

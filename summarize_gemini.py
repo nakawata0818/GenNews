@@ -44,10 +44,15 @@ def cleanup_llm_output(text):
     """LLMの出力から不要なメタ発言や記号を削除する"""
     if not text:
         return ""
-    # Markdownの強調記号（*）を削除（TTSが「アスタリスク」と読むのを防ぐ）
-    text = text.replace('*', '')
+    # Markdownの強調記号（*）やハッシュ（#）を削除
+    text = text.replace('*', '').replace('#', '')
     # 冒頭によくあるメタ発言（承知いたしました、以下にまとめます等）を削除
-    text = re.sub(r'^.*?(承知いたしました|わかりました|かしこまりました|まとめます|出力します|構成します|紹介します|作成しました|提示します)[:：\n\s]*', '', text, flags=re.MULTILINE | re.IGNORECASE)
+    patterns = [
+        r'^.*?(承知いたしました|わかりました|かしこまりました|まとめます|出力します|構成します|紹介します|作成しました|提示します|お伝えします)[:：\n\s]*',
+        r'^(はい、|それでは、)'
+    ]
+    for pattern in patterns:
+        text = re.sub(pattern, '', text, flags=re.MULTILINE | re.IGNORECASE)
     return text.strip()
 
 def get_models_to_try(client):
