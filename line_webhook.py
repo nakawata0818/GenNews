@@ -1,6 +1,6 @@
 import os
 import threading
-from flask import Flask, request
+from flask import Flask, request, send_file
 from urllib.parse import parse_qs
 import requests
 import gspread
@@ -15,6 +15,11 @@ from category import get_category, recategorize_user_keywords
 from radio.send_radio import run_radio_flow
 
 app = Flask(__name__)
+
+@app.route("/audio/<filename>")
+def serve_audio(filename):
+    """/tmpに保存された音声ファイルを配信する"""
+    return send_file(f"/tmp/{filename}", mimetype="audio/mpeg")
 
 def safe_get_more_news(user_id):
     """スレッド内でエラーが起きてもプロセスを落とさずログを出す"""
