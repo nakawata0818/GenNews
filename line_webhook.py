@@ -124,7 +124,9 @@ def linewebhook():
                     reply_message(event['replyToken'], "削除をキャンセルしました。")
                 else:
                     try:
-                        num = int(user_text)
+                        # 全角数字やドットなどが混じっても対応できるように
+                        num_str = user_text.replace('．', '').replace('.', '').strip()
+                        num = int(num_str)
                         user_kws = get_user_keywords(user_id)
                         if 1 <= num <= len(user_kws):
                             kw_to_del = user_kws[num-1][0]

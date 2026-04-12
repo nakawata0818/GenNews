@@ -163,7 +163,11 @@ def promote_keywords(user_id):
         
         for idx, kw in reversed(to_promote): # 下から削除しないと行番号がずれるため
             update_keyword_weight(user_id, kw, -0.2) # 初期weight 0.8にするため(1.0 + -0.2)
-            rel_sheet.delete_rows(idx)
+            # 互換性のための処理
+            if hasattr(rel_sheet, 'delete_row'):
+                rel_sheet.delete_row(idx)
+            else:
+                rel_sheet.delete_rows(idx)
             print(f"[PROMOTION] {kw} moved to main keywords for {user_id}")
     except Exception as e:
         print(f"[Error] promote_keywords: {e}")
@@ -181,7 +185,11 @@ def delete_user_keyword(user_id, keyword):
             s_target_kw = str(keyword).strip()
 
             if s_uid == s_target_uid and s_kw == s_target_kw:
-                sheet.delete_rows(idx)
+                # 互換性のための処理
+                if hasattr(sheet, 'delete_row'):
+                    sheet.delete_row(idx)
+                else:
+                    sheet.delete_rows(idx)
                 print(f"[DEBUG] Deleted row {idx} for user {user_id}, keyword {keyword}")
                 return True
     except Exception as e:
@@ -282,7 +290,18 @@ def get_sheet_by_name(name):
         _spreadsheet = client.open_by_key(GOOGLE_SHEET_KEY)
     
     if name not in _worksheets:
-        _worksheets[name] = _spreadsheet.worksheet(name)
+        try:
+            _worksheets[name] = _spreadsheet.worksheet(name)
+        except gspread.exceptions.WorksheetNotFound:
+            # シートがない場合は自動作成（1行目にデフォルトヘッダーを入れる）
+            print(f"[INFO] Worksheet '{name}' not found. Creating...")
+            new_ws = _spreadsheet.add_worksheet(title=name, rows="100", cols="20")
+            if name == 'user_state':
+                new_ws.append_row(['user_id', 'state', 'updated_at'])
+            elif name == 'related_keywords':
+                new_ws.append_row(['user_id', 'keyword', 'score', 'like_count', 'last_updated'])
+            _worksheets[name] = new_ws
+
     return _worksheets[name]
 
 def get_gspread_client():

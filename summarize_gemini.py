@@ -89,11 +89,18 @@ def generate_content_with_retry(client, contents):
                 break
     return None
 
-def summarize_article(title: str, summary: str) -> str:
+def summarize_article(title: str, summary: str, existing_related_keywords: list = None) -> str:
     client = genai.Client(api_key=GEMINI_API_KEY)
+    
+    # 既存のキーワードがある場合の追加命令を構築
+    extra_instruction = ""
+    if existing_related_keywords:
+        kw_list_str = ", ".join(existing_related_keywords)
+        extra_instruction = f"\n# 既存の関連キーワードリスト\n{kw_list_str}\n\n# 抽出時の追加条件\n・既存のリストに似た意味の単語がある場合は、新しく作らずに既存の単語を優先して使用してください。\n・表記揺れ（例：ChatGPTとチャットGPTなど）を防ぎ、一貫性を保ってください。"
+
     content = f"タイトル: {title}\n内容: {summary}"
     
-    res_text = generate_content_with_retry(client, PROMPT + "\n" + content)
+    res_text = generate_content_with_retry(client, PROMPT + extra_instruction + "\n" + content)
     if res_text:
         return res_text
 

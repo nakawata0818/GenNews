@@ -155,10 +155,13 @@ def deliver_news_to_user(user_id):
         print(f"[DEBUG] No new articles found for {user_id}")
         return
 
+    # 既存の関連キーワードをリスト化して要約時に渡す準備
+    existing_rel_kws = [rk.get('keyword') for rk in user_profile.get('related_keywords', [])]
+
     # まとめて要約
     print(f"[DEBUG] Summarizing {len(all_user_articles)} articles...")
     for a in all_user_articles:
-        res = summarize_article(a['title'], a['summary'])
+        res = summarize_article(a['title'], a['summary'], existing_related_keywords=existing_rel_kws)
         if res and "【キーワード】" in res:
             parts = res.split("【キーワード】")
             a['summary'] = parts[0].strip()
@@ -231,7 +234,13 @@ def get_more_news(user_id):
         article['category'] = features['category']
         processed_articles.append(article)
 
-    scored = [(score_article(a, user_keywords, user_profile), a) for a in processed_articles]
+    # 最適化：露出スコアと既存関連キーワードを一度に取得
+    exposure_logs = get_all_exposure_logs(user_id)
+    rel_kws_data = get_related_keywords(user_id)
+    user_profile['related_keywords'] = rel_kws_data
+    existing_rel_kws = [rk.get('keyword') for rk in rel_kws_data]
+
+    scored = [(score_article(a, user_keywords, user_profile, exposure_func=lambda uid, kw: calculate_exposure_score_from_logs(exposure_logs, kw)), a) for a in processed_articles]
     scored.sort(reverse=True, key=lambda x: x[0])
     top5 = [a for _, a in scored[:5]]
     
@@ -243,7 +252,7 @@ def get_more_news(user_id):
             kw for kw in keywords_only
             if kw.lower() in title_text or kw.lower() in summary_text
         ]
-        res = summarize_article(article['title'], article['summary'])
+        res = summarize_article(article['title'], article['summary'], existing_related_keywords=existing_rel_kws)
         if "【キーワード】" in res:
             parts = res.split("【キーワード】")
             article['summary'] = parts[0].strip()
