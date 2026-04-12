@@ -6,7 +6,10 @@ from datetime import datetime
 
 def upload_to_gcs(file_path, user_id):
     """ファイルをGCSにアップロードして公開URLを返す"""
-    creds_json = base64.b64decode(os.environ["GOOGLE_APPLICATION_CREDENTIALS_JSON"]).decode("utf-8")
+    b64_creds = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+    if not b64_creds:
+        raise Exception("GOOGLE_CREDENTIALS_BASE64 が設定されていません")
+    creds_json = base64.b64decode(b64_creds).decode("utf-8")
     creds_dict = json.loads(creds_json)
     
     client = storage.Client.from_service_account_info(creds_dict)

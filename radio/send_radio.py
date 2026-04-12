@@ -2,8 +2,8 @@ import requests
 from config import LINE_CHANNEL_ACCESS_TOKEN
 from send_news import get_prepared_articles # 後ほど send_news.py に追加
 from radio.radio_script import generate_radio_script
-from radio.tts_google.py import generate_audio
-from radio.storage.py import upload_to_gcs
+from radio.tts_google import generate_audio
+from radio.storage import upload_to_gcs
 import os
 
 def run_radio_flow(user_id):

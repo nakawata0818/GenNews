@@ -29,5 +29,5 @@ def generate_radio_script(articles):
     
     res_text = generate_content_with_retry(client, prompt)
     if res_text:
-        return res_text[:1200] # 文字数制限
+        return res_text
     return "本日のニュースをお届けします。申し訳ありません。台本の生成に失敗しました。"
