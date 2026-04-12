@@ -15,33 +15,51 @@ def init_tts_client():
     return texttospeech.TextToSpeechClient.from_service_account_info(creds_dict)
 
 def generate_audio(text):
-    """テキストをMP3音声ファイルに変換する"""
+    """テキストをMP3音声ファイルに変換する (5000バイト制限対応版)"""
     client = init_tts_client()
-    synthesis_input = texttospeech.SynthesisInput(text=text)
 
-    # 声の設定（Neural2 B は落ち着いた男性の声、Neural2 C は女性の声など選択可能）
-    voice = texttospeech.VoiceSelectionParams(
-        language_code="ja-JP",
-        name="ja-JP-Neural2-B"
-    )
+    # 1500文字ごとに分割 (日本語は3バイト/文字なので、1500*3 = 4500バイトで安全圏)
+    chunk_size = 1500
+    chunks = [text[i:i+chunk_size] for i in range(0, len(text), chunk_size)]
+    
+    combined_audio_content = b""
 
-    # オーディオ設定（少しだけ速めることで聞きやすくする）
-    audio_config = texttospeech.AudioConfig(
-        audio_encoding=texttospeech.AudioEncoding.MP3,
-        speaking_rate=1.05
-    )
+    for i, chunk in enumerate(chunks):
+        print(f"[DEBUG][TTS] Processing chunk {i+1}/{len(chunks)} ({len(chunk)} chars)")
+        synthesis_input = texttospeech.SynthesisInput(text=chunk)
+
+        # 声の設定
+        voice = texttospeech.VoiceSelectionParams(
+            language_code="ja-JP",
+            name="ja-JP-Neural2-B"
+        )
+
+        # オーディオ設定
+        audio_config = texttospeech.AudioConfig(
+            audio_encoding=texttospeech.AudioEncoding.MP3,
+            speaking_rate=1.05
+        )
+
+        try:
+            response = client.synthesize_speech(
+                input=synthesis_input,
+                voice=voice,
+                audio_config=audio_config
+            )
+            combined_audio_content += response.audio_content
+        except Exception as e:
+            print(f"[TTS Error] Chunk {i+1} failed: {e}")
+            if not combined_audio_content: return None
+            break # 途中までできている場合はそれを返す
+        
+    if not combined_audio_content:
+        return None
 
     try:
-        response = client.synthesize_speech(
-            input=synthesis_input,
-            voice=voice,
-            audio_config=audio_config
-        )
-        
         filename = f"{uuid.uuid4()}.mp3"
         path = f"/tmp/{filename}"
         with open(path, "wb") as out:
-            out.write(response.audio_content)
+            out.write(combined_audio_content)
         return filename, path
     except Exception as e:
         print(f"[TTS Error] {e}")

@@ -14,19 +14,15 @@ from category import get_category
 from line_format import create_carousel
 from config import LINE_CHANNEL_ACCESS_TOKEN
 from datetime import datetime, timezone, timedelta
-import threading
 
 def get_time_of_day_label():
     """現在の日本時間から 朝/昼/夕方/夜 のラベルを返す"""
-    try:
-        jst = timezone(timedelta(hours=9))
-        hour = datetime.now(jst).hour
-        if 5 <= hour < 11: return "今日の朝"
-        elif 11 <= hour < 14: return "今日のお昼"
-        elif 14 <= hour < 18: return "今日の夕方"
-        else: return "今日の夜"
-    except Exception:
-        return "今日"
+    jst = timezone(timedelta(hours=9))
+    hour = datetime.now(jst).hour
+    if 5 <= hour < 11: return "今日の朝"
+    elif 11 <= hour < 14: return "今日のお昼"
+    elif 14 <= hour < 18: return "今日の夕方"
+    else: return "今日の夜"
 
 def send_line_flex(user_id, flex_json):
     """Flex MessageをLINEに送信"""
@@ -160,9 +156,6 @@ def deliver_news_to_user(user_id):
         print(f"[DEBUG] No new articles found for {user_id}")
         return
 
-    time_label = get_time_of_day_label()
-    print(f"[DEBUG] Processing delivery for {time_label}")
-
     user_profile = generate_user_profile(user_id)
     user_profile['related_keywords'] = get_related_keywords(user_id)
     # 既存の関連キーワードをリスト化して要約時に渡す準備
@@ -190,8 +183,8 @@ def deliver_news_to_user(user_id):
         carousel = create_carousel(chunk)
         send_line_flex(user_id, carousel)
 
-    # ニュース記事送信後にラジオ配信を同じスレッドで実行
-    print(f"[DEBUG] News sent. Starting radio integration...")
+    # ニュース配信後に同じスレッドでラジオ配信を実行
+    print(f"[DEBUG] Flex messages sent. Starting radio flow...")
     from radio.send_radio import run_radio_flow
     run_radio_flow(user_id, all_user_articles, time_label)
 
