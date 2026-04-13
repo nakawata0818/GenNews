@@ -40,22 +40,13 @@ def run_radio_flow(user_id, articles, time_of_day_label):
 
 def send_audio_message(user_id, audio_url, articles, time_of_day_label):
     headers = {"Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}", "Content-Type": "application/json"}
-    
-    # 記事のURLリストを作成
-    url_list_text = f"📖 {time_of_day_label}のニュース記事一覧：\n\n"
-    for i, a in enumerate(articles, 1):
-        line = f"{i}. {a.get('title')}\n{a.get('url')}\n\n"
-        if len(url_list_text) + len(line) > 4800: # 5000文字制限の安全圏
-            url_list_text += "...(以下省略)"
-            break
-        url_list_text += line
 
     data = {
         "to": user_id,
         "messages": [
             {"type": "text", "text": f"🎧 {time_of_day_label}のパーソナライズニュースラジオです。"},
-            {"type": "audio", "originalContentUrl": audio_url, "duration": 600000}, # 最大10分 (600,000ms)
-            {"type": "text", "text": url_list_text.strip()}
+            # 不明なエラー対策として、URLが確実に到達可能になるよう、不要なメッセージを削り構造を安定化
+            {"type": "audio", "originalContentUrl": audio_url, "duration": 60000} # 再生時間は一旦60秒表示(LINE側の仕様に合わせる)
         ]
     }
     res = requests.post("https://api.line.me/v2/bot/message/push", headers=headers, json=data)
