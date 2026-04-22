@@ -2,6 +2,7 @@ import os
 import time
 import random
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from sheet_utils import get_user_keywords, get_all_user_ids, get_sent_article_ids, save_sent_articles, save_article_log, save_article_logs_batch, get_sheet_by_name, save_exposure, calculate_exposure_score_from_logs, get_all_exposure_logs, promote_keywords, get_related_keywords
 from scoring import score_article
 from rss import fetch_rss_articles
@@ -165,11 +166,9 @@ def deliver_news_to_user(user_id):
     # 既存の関連キーワードをリスト化して要約時に渡す準備
     existing_rel_kws = [rk.get('keyword', '') for rk in user_profile.get('related_keywords', [])]
 
-    # まとめて要約
-    total_summaries = len(all_user_articles)
-    print(f"[DEBUG] Summarizing {total_summaries} articles...")
-    for i, a in enumerate(all_user_articles):
-        print(f"[DEBUG] Summarizing [{i+1}/{total_summaries}]: {a.get('title')[:30]}...")
+    # まとめて要約 (並列処理)
+    print(f"[DEBUG] Summarizing {len(all_user_articles)} articles in parallel...")
+    def _summarize_task(a):
         res = summarize_article(a['title'], a['summary'], existing_related_keywords=existing_rel_kws)
         if res and "【キーワード】" in res:
             parts = res.split("【キーワード】")
@@ -178,7 +177,11 @@ def deliver_news_to_user(user_id):
         else:
             a['summary'] = res if res else ""
             a['relevant_keywords'] = ""
-        time.sleep(1)
+        return a
+
+    # 最大5並列で実行 (APIのクォータに合わせて調整可能)
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        list(executor.map(_summarize_task, all_user_articles))
 
     print(f"[DEBUG] Sending {len(all_user_articles)} articles to LINE...")
     # まとめて送信 (LINEカルーセルの10件制限に従って分割送信)
@@ -257,14 +260,12 @@ def get_more_news(user_id):
     user_profile['related_keywords'] = rel_kws_data
     existing_rel_kws = [rk.get('keyword') for rk in rel_kws_data]
 
-    print(f"[DEBUG] Scoring {len(processed_articles)} articles...")
+    print(f"[DEBUG] Scoring and summarizing top 5 articles in parallel...")
     scored = [(score_article(a, user_keywords, user_profile, exposure_func=lambda uid, kw: calculate_exposure_score_from_logs(exposure_logs, kw)), a) for a in processed_articles]
     scored.sort(reverse=True, key=lambda x: x[0])
     top5 = [a for _, a in scored[:5]]
     
-    print(f"[DEBUG] Starting summarization for top 5 articles...")
-    for article in top5:
-        # 記事に関連するキーワードを記録
+    def _summarize_more_task(article):
         title_text = article.get('title', '').lower()
         summary_text = article.get('summary', '').lower()
         article['matched_keywords'] = [
@@ -279,7 +280,10 @@ def get_more_news(user_id):
         else:
             article['summary'] = res
             article['relevant_keywords'] = ""
-        time.sleep(1)
+        return article
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        list(executor.map(_summarize_more_task, top5))
 
     if top5:
         carousel = create_carousel(top5)
