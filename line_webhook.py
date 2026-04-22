@@ -8,13 +8,18 @@ from oauth2client.service_account import ServiceAccountCredentials # Keep for ge
 
 from config import LINE_CHANNEL_ACCESS_TOKEN, SHEET_NAME, GOOGLE_SHEET_KEY
 from sheet_utils import setup_google_credentials, update_keyword_weight, save_article_log, get_sheet_by_name, set_user_keywords, get_user_keywords, update_related_keyword, delete_user_keyword, get_user_state, set_user_state
-from send_news import get_more_news, send_line_flex, deliver_news_to_user
+from send_news import get_more_news, send_line_flex, deliver_news_to_user, get_prepared_articles, get_time_of_day_label
 from feature_extractor import extract_features
 from user_profile import generate_user_profile, generate_profile_summary
 from category import get_category, recategorize_user_keywords
 from radio.send_radio import run_radio_flow
 
 app = Flask(__name__)
+
+@app.route("/audio/<filename>")
+def serve_audio(filename):
+    """/tmpに保存された音声ファイルを直接配信する（GCS不使用）"""
+    return send_file(f"/tmp/{filename}", mimetype="audio/mpeg")
 
 def safe_get_more_news(user_id):
     """スレッド内でエラーが起きてもプロセスを落とさずログを出す"""
@@ -39,6 +44,15 @@ def safe_recategorize(user_id):
         recategorize_user_keywords(user_id)
     except Exception as e:
         print(f"[THREAD ERROR] recategorize: {e}")
+
+def safe_run_radio(user_id):
+    """ラジオ生成を引数付きで安全に実行"""
+    try:
+        articles = get_prepared_articles(user_id)
+        label = get_time_of_day_label()
+        run_radio_flow(user_id, articles, label)
+    except Exception as e:
+        print(f"[THREAD ERROR] run_radio: {e}")
 
 @app.route("/linewebhook", methods=['POST'])
 def linewebhook():
@@ -170,8 +184,8 @@ def linewebhook():
                 reply_message(event['replyToken'], '📖 ニュースと🎧 ラジオを準備しています。数分ほどお待ちください。')
 
             elif user_text == 'ラジオ':
-                # ラジオ生成は非常に重いためスレッドで実行
-                thread = threading.Thread(target=run_radio_flow, args=(user_id,))
+                # 引数が必要なため専用のラッパーを介して実行
+                thread = threading.Thread(target=safe_run_radio, args=(user_id,))
                 thread.start()
                 reply_message(event['replyToken'], '📻 本日のニュースを音声用に編集しています。1〜2分ほどお待ちください。')
 

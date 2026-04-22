@@ -128,25 +128,33 @@ def get_prepared_articles(user_id):
     sent_ids = get_sent_article_ids(user_id)
     exposure_logs = get_all_exposure_logs(user_id)
     
-    all_articles = []
-    for category, kws in cat_to_kws.items():
+    def _process_category(item):
+        category, kws = item
         print(f"[DEBUG]   Processing category: {category}")
         kw_names = [k for k, w in kws]
         articles = deduplicate_articles(fetch_rss_articles(kw_names))
-        print(f"[DEBUG]   Fetched {len(articles)} unique articles")
-
-        processed = []
+        
+        # スコアリングを並列化（または一括処理）
+        category_processed = []
         for a in articles:
             features = extract_features(a)
             a.update(features)
             a['matched_keywords'] = [k for k in kw_names if k.lower() in a.get('title','').lower()]
             score = score_article(a, kws, user_profile, exposure_func=lambda uid, kw: calculate_exposure_score_from_logs(exposure_logs, kw))
-            processed.append((score, a))
+            category_processed.append((score, a))
         
-        selected = select_311_articles(processed, sent_ids, user_profile.get("raw_logs", []))
-        print(f"[DEBUG]   Selected {len(selected)} articles for delivery")
+        selected = select_311_articles(category_processed, sent_ids, user_profile.get("raw_logs", []))
         for a in selected: a['category'] = category
-        all_articles.extend(selected)
+        return selected
+
+    # カテゴリごとに並列でRSS取得・スコアリング
+    all_articles = []
+    print(f"[DEBUG] Fetching RSS for {len(cat_to_kws)} categories in parallel...")
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        results = list(executor.map(_process_category, cat_to_kws.items()))
+        for res in results:
+            all_articles.extend(res)
+            
     return all_articles
 
 def deliver_news_to_user(user_id):

@@ -7,7 +7,7 @@ from config import GCS_BUCKET_NAME
 
 def upload_to_gcs(file_path, user_id):
     """ファイルをGCSにアップロードして公開URLを返す"""
-    b64_creds = os.getenv("GOOGLE_CREDENTIALS_BASE64")
+    b64_creds = os.getenv("GOOGLE_CREDENTIALS_BASE64") or os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
     if not b64_creds:
         raise Exception("GOOGLE_CREDENTIALS_BASE64 が設定されていません")
     creds_json = base64.b64decode(b64_creds).decode("utf-8")
