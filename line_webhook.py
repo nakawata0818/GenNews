@@ -8,7 +8,7 @@ from oauth2client.service_account import ServiceAccountCredentials # Keep for ge
 
 from config import LINE_CHANNEL_ACCESS_TOKEN, SHEET_NAME, GOOGLE_SHEET_KEY
 from sheet_utils import setup_google_credentials, update_keyword_weight, save_article_log, get_sheet_by_name, set_user_keywords, get_user_keywords, update_related_keyword, delete_user_keyword, get_user_state, set_user_state
-from send_news import get_more_news, send_line_flex, deliver_news_to_user, get_prepared_articles, get_time_of_day_label
+from send_news import get_more_news, send_line_flex, deliver_news_to_user, get_prepared_articles, get_time_of_day_label, main as run_all_news
 from feature_extractor import extract_features
 from user_profile import generate_user_profile, generate_profile_summary
 from category import get_category, recategorize_user_keywords
@@ -25,6 +25,14 @@ def serve_audio(filename):
 def index():
     """Renderのヘルスチェック用"""
     return "GenNews Bot is running."
+
+@app.route("/trigger_news", methods=['POST'])
+def trigger_news_endpoint():
+    """GASなどの外部トリガーから全ユーザーへのニュース配信を開始する"""
+    # 配信処理は時間がかかるため、スレッドを分けて即座にレスポンスを返す
+    thread = threading.Thread(target=run_all_news)
+    thread.start()
+    return "News delivery process started in background.", 200
 
 def safe_get_more_news(user_id):
     """スレッド内でエラーが起きてもプロセスを落とさずログを出す"""
