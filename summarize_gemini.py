@@ -1,10 +1,14 @@
 import time
 import re
+import threading
 from google import genai
 from config import GEMINI_API_KEY
 
 # クォータ制限や存在しないモデルを一時的に記録して、今回の実行（プロセス内）で再試行しないようにする
 _DISABLED_MODELS = set()
+
+# スレッド間でのキャッシュ競合を防ぐためのロック
+_MODEL_CACHE_LOCK = threading.Lock()
 
 # 利用可能なモデルのキャッシュ
 _DYNAMIC_MODELS_CACHE = []
@@ -58,25 +62,26 @@ def cleanup_llm_output(text):
 def get_models_to_try(client):
     """動的にモデルリストを取得し最新順にソートする（キャッシュ利用）"""
     global _DYNAMIC_MODELS_CACHE
-    if not _DYNAMIC_MODELS_CACHE:
-        try:
-            discovered_models = []
-            for m in client.models.list():
-                # 'gemini' を含み、かつテキスト生成が可能なモデルのみを抽出
-                name_lower = m.name.lower()
-                if 'generateContent' in m.supported_actions and \
-                   'gemini' in name_lower and \
-                   not any(x in name_lower for x in ['robotics', 'vision', 'image']):
-                    discovered_models.append(m.name)
-            
-            # 文字列の降順ソートにより、gemini-2.0 > gemini-1.5 のように最新モデルを優先する
-            discovered_models.sort(reverse=True)
-            _DYNAMIC_MODELS_CACHE = discovered_models
-            print(f"[INFO] Dynamically discovered models (latest first): {_DYNAMIC_MODELS_CACHE}")
-        except Exception as e:
-            print(f"[Error] Failed to fetch models dynamically: {e}")
-            # APIからの取得に失敗した場合のフォールバック
-            _DYNAMIC_MODELS_CACHE = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
+    with _MODEL_CACHE_LOCK:
+        if not _DYNAMIC_MODELS_CACHE:
+            try:
+                discovered_models = []
+                for m in client.models.list():
+                    # 'gemini' を含み、かつテキスト生成が可能なモデルのみを抽出
+                    name_lower = m.name.lower()
+                    if 'generateContent' in m.supported_actions and \
+                       'gemini' in name_lower and \
+                       not any(x in name_lower for x in ['robotics', 'vision', 'image']):
+                        discovered_models.append(m.name)
+                
+                # 文字列の降順ソートにより、gemini-2.0 > gemini-1.5 のように最新モデルを優先する
+                discovered_models.sort(reverse=True)
+                _DYNAMIC_MODELS_CACHE = discovered_models
+                print(f"[INFO] Dynamically discovered models (latest first): {_DYNAMIC_MODELS_CACHE}")
+            except Exception as e:
+                print(f"[Error] Failed to fetch models dynamically: {e}")
+                # APIからの取得に失敗した場合のフォールバック
+                _DYNAMIC_MODELS_CACHE = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro']
     return _DYNAMIC_MODELS_CACHE
 
 def generate_content_with_retry(client, contents):

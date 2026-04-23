@@ -5,7 +5,7 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import requests
-from config import LINE_CHANNEL_ACCESS_TOKEN
+from config import LINE_CHANNEL_ACCESS_TOKEN, RENDER_HOSTNAME
 from radio.radio_script import generate_radio_script
 from radio.tts_google import generate_audio
 import os
@@ -30,14 +30,9 @@ def run_radio_flow(user_id, articles, time_of_day_label):
     filename, audio_path = audio_res
     print(f"[DEBUG][RADIO] Audio generated: {filename} at {audio_path}. ({time.time() - tts_start:.2f}s)")
 
-    # 4. GCSにアップロードして永続化
-    try:
-        audio_url = upload_to_gcs(audio_path, user_id)
-        print(f"[DEBUG][RADIO] Audio uploaded to GCS: {audio_url}")
-    except Exception as e:
-        print(f"[RADIO Error] GCS upload failed: {e}")
-        send_line_text(user_id, "音声の保存に失敗しました。")
-        return
+    # 4. ローカルURL生成 (Renderの外部ホスト名を使用)
+    audio_url = f"https://{RENDER_HOSTNAME}/audio/{filename}"
+    print(f"[DEBUG][RADIO] Audio URL: {audio_url}")
 
     # 5. LINE送信
     print(f"[DEBUG][RADIO] Sending audio and URLs to LINE...")

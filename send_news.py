@@ -176,20 +176,25 @@ def deliver_news_to_user(user_id):
 
     # まとめて要約 (並列処理)
     print(f"[DEBUG] Summarizing {len(all_user_articles)} articles in parallel...")
-    def _summarize_task(a):
-        res = summarize_article(a['title'], a['summary'], existing_related_keywords=existing_rel_kws)
-        if res and "【キーワード】" in res:
-            parts = res.split("【キーワード】")
-            a['summary'] = parts[0].strip()
-            a['relevant_keywords'] = parts[1].strip()
-        else:
-            a['summary'] = res if res else ""
-            a['relevant_keywords'] = ""
+    def _summarize_task(idx_and_article):
+        idx, a = idx_and_article
+        try:
+            print(f"[DEBUG][TTS] Summarizing {idx+1}/{len(all_user_articles)}: {a.get('title')[:20]}...")
+            res = summarize_article(a['title'], a['summary'], existing_related_keywords=existing_rel_kws)
+            if res and "【キーワード】" in res:
+                parts = res.split("【キーワード】")
+                a['summary'] = parts[0].strip()
+                a['relevant_keywords'] = parts[1].strip()
+            else:
+                a['summary'] = res if res else ""
+                a['relevant_keywords'] = ""
+        except Exception as e:
+            print(f"[ERROR] Summarization failed for {a.get('title')}: {e}")
         return a
 
-    # 最大5並列で実行 (APIのクォータに合わせて調整可能)
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        list(executor.map(_summarize_task, all_user_articles))
+    # APIのクォータ（無料枠はRPM制限が厳しめ）を考慮し並列数を3程度に抑えると安定します
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        list(executor.map(_summarize_task, enumerate(all_user_articles)))
 
     print(f"[DEBUG] Sending {len(all_user_articles)} articles to LINE...")
     # まとめて送信 (LINEカルーセルの10件制限に従って分割送信)
