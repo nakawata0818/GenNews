@@ -13,6 +13,7 @@ def fetch_rss_articles(keywords: List[str]) -> List[Dict]:
         query = f"{keyword} {EXCLUDE_QUERY}"
         encoded_query = urllib.parse.quote(query)
         url = f"https://news.google.com/rss/search?q={encoded_query}&hl=ja&gl=JP&ceid=JP:ja"
+        print(f"[DEBUG][RSS] Fetching: {keyword}")
         feed = feedparser.parse(url)
         for entry in feed.entries:
             articles.append({

@@ -21,6 +21,11 @@ def serve_audio(filename):
     """/tmpに保存された音声ファイルを直接配信する（GCS不使用）"""
     return send_file(f"/tmp/{filename}", mimetype="audio/mpeg")
 
+@app.route("/")
+def index():
+    """Renderのヘルスチェック用"""
+    return "GenNews Bot is running."
+
 def safe_get_more_news(user_id):
     """スレッド内でエラーが起きてもプロセスを落とさずログを出す"""
     try:
